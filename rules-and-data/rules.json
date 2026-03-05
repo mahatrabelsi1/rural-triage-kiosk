@@ -1,0 +1,140 @@
+{
+  "symptoms": [
+    "fever","cough","shortness_of_breath","chest_pain","sore_throat",
+    "chills","fatigue","body_aches","rash",
+    "abdominal_pain","nausea","vomiting","diarrhea","dehydration_signs",
+    "headache","dizziness","fainting","confusion","severe_weakness",
+    "bleeding","head_injury","back_pain",
+    "urination_pain","allergic_reaction","pregnancy_bleeding"
+  ],
+  "levels": { "GREEN": 0, "ORANGE": 1, "RED": 2 },
+
+  "red_rules": [
+    {
+      "id": "R1",
+      "logic": "ANY",
+      "conditions": [
+        {"symptom":"chest_pain","op":">=","value":3},
+        {"symptom":"shortness_of_breath","op":">=","value":3},
+        {"symptom":"abdominal_pain","op":">=","value":3},
+        {"symptom":"headache","op":">=","value":3},
+        {"symptom":"bleeding","op":">=","value":3},
+        {"symptom":"allergic_reaction","op":">=","value":3},
+        {"symptom":"severe_weakness","op":">=","value":3}
+      ],
+      "reason": "Severe symptom reported."
+    },
+    {
+      "id": "R2",
+      "logic": "ANY",
+      "conditions": [
+        {"symptom":"fainting","op":">=","value":1},
+        {"symptom":"confusion","op":">=","value":1},
+        {"symptom":"head_injury","op":">=","value":1},
+        {"symptom":"pregnancy_bleeding","op":">=","value":1}
+      ],
+      "reason": "High-risk symptom present."
+    },
+    {
+      "id": "R3",
+      "logic": "ALL",
+      "conditions": [
+        {"symptom":"chest_pain","op":">=","value":2},
+        {"symptom":"shortness_of_breath","op":">=","value":2}
+      ],
+      "reason": "Chest pain with breathing difficulty."
+    },
+    {
+      "id": "R4",
+      "logic": "ALL",
+      "conditions": [
+        {"symptom":"fever","op":">=","value":2},
+        {"symptom":"confusion","op":">=","value":1}
+      ],
+      "reason": "Fever with confusion."
+    },
+    {
+      "id": "R5",
+      "logic": "ALL",
+      "conditions": [
+        {"symptom":"bleeding","op":">=","value":2},
+        {"symptom":"dizziness","op":">=","value":2}
+      ],
+      "reason": "Bleeding with dizziness."
+    },
+    {
+      "id": "R6",
+      "logic": "ALL",
+      "conditions": [
+        {"symptom":"allergic_reaction","op":">=","value":2},
+        {"symptom":"shortness_of_breath","op":">=","value":1}
+      ],
+      "reason": "Allergic reaction with breathing symptoms."
+    }
+  ],
+
+  "orange_rules": [
+    {
+      "id": "O1",
+      "logic": "ANY",
+      "conditions": [
+        {"symptom":"fever","op":">=","value":2},
+        {"symptom":"abdominal_pain","op":"==","value":2},
+        {"symptom":"chest_pain","op":"==","value":2},
+        {"symptom":"shortness_of_breath","op":"==","value":2},
+        {"symptom":"vomiting","op":">=","value":2},
+        {"symptom":"diarrhea","op":">=","value":2},
+        {"symptom":"dehydration_signs","op":">=","value":2},
+        {"symptom":"urination_pain","op":">=","value":2},
+        {"symptom":"back_pain","op":"==","value":2},
+        {"symptom":"allergic_reaction","op":"==","value":2}
+      ],
+      "reason": "Moderate symptom severity reported."
+    },
+    {
+      "id": "O2",
+      "logic": "ALL",
+      "conditions": [
+        {"symptom":"fever","op":">=","value":1},
+        {"symptom":"cough","op":">=","value":1}
+      ],
+      "reason": "Fever with cough."
+    },
+    {
+      "id": "O3",
+      "logic": "ALL",
+      "conditions": [
+        {"symptom":"fever","op":">=","value":1},
+        {"symptom":"sore_throat","op":">=","value":1}
+      ],
+      "reason": "Fever with sore throat."
+    },
+    {
+      "id": "O4",
+      "logic": "ALL",
+      "conditions": [
+        {"symptom":"vomiting","op":">=","value":1},
+        {"symptom":"diarrhea","op":">=","value":1}
+      ],
+      "reason": "Vomiting with diarrhea."
+    },
+    {
+      "id": "O5",
+      "logic": "ALL",
+      "conditions": [
+        {"symptom":"headache","op":">=","value":2},
+        {"symptom":"dizziness","op":">=","value":1}
+      ],
+      "reason": "Headache with dizziness."
+    },
+    {
+      "id": "O6",
+      "logic": "ALL",
+      "conditions": [
+        {"symptom":"fatigue","op":">=","value":2},
+        {"symptom":"body_aches","op":">=","value":2}
+      ],
+      "reason": "High fatigue with body aches."
+    }
+  ]
+}

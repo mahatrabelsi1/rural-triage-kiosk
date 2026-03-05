@@ -1,0 +1,10 @@
+{
+  "fever": "Rest and drink fluids regularly. Seek care if fever becomes high, lasts more than 3 days, or symptoms worsen.",
+  "cough": "Stay hydrated and avoid irritants (smoke/dust). Seek care if breathing becomes difficult or chest pain appears.",
+  "sore_throat": "Warm fluids may help comfort. Seek care if severe difficulty swallowing or breathing symptoms appear.",
+  "diarrhea": "Focus on hydration. Seek care if signs of dehydration, blood in stool, or severe abdominal pain appear.",
+  "vomiting": "Take small sips of fluids. Seek care if persistent vomiting or signs of dehydration appear.",
+  "headache": "Rest and hydrate. Seek care if severe/worst headache, confusion, weakness, or persistent vomiting occurs.",
+  "abdominal_pain": "Eat light meals and hydrate. Seek care if pain becomes severe, persistent, or fever develops.",
+  "back_pain": "Avoid heavy lifting and keep gentle movement as tolerated. Seek care if numbness, weakness, or bladder issues occur."
+}
