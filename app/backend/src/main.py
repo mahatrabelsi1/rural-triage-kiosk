@@ -1,8 +1,9 @@
-﻿from fastapi import FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.routes_triage import router as triage_router
 from src.api.routes_pdf import router as pdf_router
+from src.api.routes_triage import router as triage_router
+from src.storage.db import init_db
 
 app = FastAPI(title="Rural Triage Kiosk", version="0.1.0")
 
@@ -18,7 +19,12 @@ app.add_middleware(
 app.include_router(triage_router, prefix="/triage", tags=["triage"])
 app.include_router(pdf_router, prefix="/pdf", tags=["pdf"])
 
+
+@app.on_event("startup")
+def startup() -> None:
+    init_db()
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
-

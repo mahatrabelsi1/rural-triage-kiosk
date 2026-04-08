@@ -1,0 +1,52 @@
+import sys
+import unittest
+import uuid
+from pathlib import Path
+
+from fastapi import HTTPException
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.api import routes_triage  # noqa: E402
+from src.storage import db as storage_db  # noqa: E402
+from src.triage.schemas import IntakeRequest  # noqa: E402
+
+
+class TestTriageLogging(unittest.TestCase):
+    def setUp(self):
+        self.original_db_path = storage_db.DB_PATH
+        self.test_db_path = ROOT / "outputs" / f"test_triage_sessions_{uuid.uuid4().hex}.db"
+        self.test_db_path.parent.mkdir(parents=True, exist_ok=True)
+        storage_db.DB_PATH = self.test_db_path
+        storage_db.init_db()
+
+    def tearDown(self):
+        storage_db.DB_PATH = self.original_db_path
+
+    def test_triage_request_is_logged_and_retrievable(self):
+        req = IntakeRequest(
+            patient_name="Alice",
+            chief_complaint_text="I have fever and cough",
+            symptoms={"fever": 2, "cough": 1, "chest_pain": 0},
+            use_nlp_extraction=True,
+        )
+
+        triage_response = routes_triage.triage(req)
+        log = routes_triage.get_triage_log(triage_response.session_id)
+
+        self.assertEqual(log["session_id"], triage_response.session_id)
+        self.assertEqual(log["triage_level"], triage_response.triage_level)
+        self.assertEqual(log["request_payload"]["patient_name"], "Alice")
+        self.assertEqual(log["response_payload"]["session_id"], triage_response.session_id)
+        self.assertIn("created_at", log)
+
+    def test_unknown_session_returns_404(self):
+        with self.assertRaises(HTTPException) as ctx:
+            routes_triage.get_triage_log("not-found")
+        self.assertEqual(ctx.exception.status_code, 404)
+
+
+if __name__ == "__main__":
+    unittest.main()

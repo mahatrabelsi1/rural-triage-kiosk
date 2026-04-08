@@ -1,12 +1,61 @@
 from pathlib import Path
+import textwrap
 
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+LEVEL_THEME = {
+    "GREEN": {
+        "banner": colors.HexColor("#1E8D68"),
+        "title": colors.HexColor("#0F5A42"),
+        "soft": colors.HexColor("#EAF8F2"),
+    },
+    "ORANGE": {
+        "banner": colors.HexColor("#DA861F"),
+        "title": colors.HexColor("#8F4F08"),
+        "soft": colors.HexColor("#FFF4E8"),
+    },
+    "RED": {
+        "banner": colors.HexColor("#C64848"),
+        "title": colors.HexColor("#7F2222"),
+        "soft": colors.HexColor("#FDEEEE"),
+    },
+}
 
-def _draw_line(c: canvas.Canvas, text: str, y: int, x: int = 60) -> int:
-    c.drawString(x, y, text[:130])
-    return y - 12
+
+def _level_theme(triage_level: str) -> dict:
+    return LEVEL_THEME.get(triage_level, LEVEL_THEME["GREEN"])
+
+
+def _draw_wrapped_text(c: canvas.Canvas, text: str, y: int, x: int = 56, width: int = 98, line_gap: int = 13) -> int:
+    for line in textwrap.wrap(text, width=width) or [""]:
+        c.drawString(x, y, line)
+        y -= line_gap
+    return y
+
+
+def _draw_bullet_list(c: canvas.Canvas, items: list[str], y: int, width: int = 96, max_items: int = 14) -> int:
+    for item in items[:max_items]:
+        wrapped = textwrap.wrap(item, width=width)
+        if not wrapped:
+            continue
+        c.drawString(60, y, f"- {wrapped[0]}")
+        y -= 12
+        for continuation in wrapped[1:]:
+            c.drawString(72, y, continuation)
+            y -= 12
+    return y
+
+
+def _draw_section_title(c: canvas.Canvas, title: str, y: int) -> int:
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(colors.HexColor("#13313D"))
+    c.drawString(50, y, title)
+    c.setLineWidth(0.8)
+    c.setStrokeColor(colors.HexColor("#D3E6EA"))
+    c.line(50, y - 4, 545, y - 4)
+    return y - 18
 
 
 def generate_doctor_pdf(
@@ -24,69 +73,84 @@ def generate_doctor_pdf(
     pdf_path = out_dir / f"triage_{session_id}.pdf"
 
     c = canvas.Canvas(str(pdf_path), pagesize=A4)
-    _, height = A4
+    page_width, page_height = A4
+    theme = _level_theme(triage_level)
 
-    y = height - 50
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, y, "Rural Clinic Triage Summary (Non-diagnostic)")
+    # Header block
+    c.setFillColor(theme["banner"])
+    c.roundRect(40, page_height - 124, page_width - 80, 78, 12, stroke=0, fill=1)
 
-    y -= 30
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(56, page_height - 74, "Rural Clinic Triage Summary")
+
     c.setFont("Helvetica", 10)
-    c.drawString(50, y, f"Session ID: {session_id}")
-    y -= 15
-    c.drawString(50, y, f"Triage Level: {triage_level}")
+    c.drawString(56, page_height - 92, "Clinical prioritization support document (non-diagnostic)")
+    c.drawRightString(page_width - 56, page_height - 74, f"Level: {triage_level}")
+    c.drawRightString(page_width - 56, page_height - 92, f"Session: {session_id}")
 
-    y -= 25
+    # Level badge
+    c.setFillColor(theme["soft"])
+    c.roundRect(50, page_height - 162, 170, 25, 10, stroke=0, fill=1)
     c.setFont("Helvetica-Bold", 11)
-    c.drawString(50, y, "Patient Snapshot")
-    y -= 15
-    c.setFont("Helvetica", 10)
-    c.drawString(50, y, f"Name: {patient_name or 'N/A'}")
-    y -= 12
-    meta_line = " | ".join([f"{k}: {v}" for k, v in patient_meta.items() if v is not None and v != ""])
-    c.drawString(50, y, meta_line if meta_line else "N/A")
+    c.setFillColor(theme["title"])
+    c.drawString(60, page_height - 146, f"Priority: {triage_level}")
 
-    y -= 25
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(50, y, "Chief Complaint (verbatim)")
-    y -= 15
-    c.setFont("Helvetica", 10)
-    complaint = chief_complaint_text.strip() or "N/A"
-    c.drawString(50, y, complaint[:130] + ("..." if len(complaint) > 130 else ""))
+    y = page_height - 184
 
-    y -= 25
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(50, y, "Selected Symptoms (1-5)")
-    y -= 15
+    # Patient Snapshot
+    y = _draw_section_title(c, "Patient Snapshot", y)
+    c.setFillColor(colors.HexColor("#13313D"))
     c.setFont("Helvetica", 10)
-    if selected_symptoms:
-        for item in selected_symptoms[:15]:
-            y = _draw_line(c, f"- {item}", y)
-    else:
-        y = _draw_line(c, "- None selected", y)
+    y = _draw_wrapped_text(c, f"Name: {patient_name or 'N/A'}", y)
+    meta_line = " | ".join(
+        [f"{k}: {v}" for k, v in patient_meta.items() if v is not None and v != ""]
+    )
+    y = _draw_wrapped_text(c, meta_line if meta_line else "N/A", y)
 
+    # Chief complaint
     y -= 8
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(50, y, "Matched Rule Reasons")
-    y -= 15
+    y = _draw_section_title(c, "Chief Complaint (verbatim)", y)
+    complaint = chief_complaint_text.strip() or "N/A"
+    c.setFont("Helvetica", 10)
+    c.setFillColor(colors.HexColor("#1B3A48"))
+    y = _draw_wrapped_text(c, complaint, y, width=98)
+
+    # Selected symptoms
+    y -= 8
+    y = _draw_section_title(c, "Selected Symptoms (1-5)", y)
+    c.setFont("Helvetica", 10)
+    c.setFillColor(colors.HexColor("#13313D"))
+    if selected_symptoms:
+        y = _draw_bullet_list(c, selected_symptoms, y, max_items=16)
+    else:
+        y = _draw_bullet_list(c, ["None selected"], y, max_items=1)
+
+    # Matched reasons
+    y -= 8
+    y = _draw_section_title(c, "Matched Rule Reasons", y)
     c.setFont("Helvetica", 10)
     if matched_reasons:
-        for reason in matched_reasons[:10]:
-            y = _draw_line(c, f"- {reason}", y)
+        y = _draw_bullet_list(c, matched_reasons, y, max_items=12)
     else:
-        y = _draw_line(c, "- None (GREEN default)", y)
+        y = _draw_bullet_list(c, ["None (GREEN default)"], y, max_items=1)
 
+    # Guidance
     y -= 8
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(50, y, "Guidance / Advice")
-    y -= 15
+    y = _draw_section_title(c, "Guidance / Advice", y)
     c.setFont("Helvetica", 10)
-    for block in advice_blocks[:10]:
-        y = _draw_line(c, f"- {block}", y)
+    y = _draw_bullet_list(c, advice_blocks, y, max_items=12)
 
-    y -= 20
+    # Footer note
+    c.setStrokeColor(colors.HexColor("#D3E6EA"))
+    c.line(50, 64, page_width - 50, 64)
     c.setFont("Helvetica-Oblique", 9)
-    c.drawString(50, y, "Safety note: This tool does not provide a medical diagnosis. It supports prioritization only.")
+    c.setFillColor(colors.HexColor("#55727E"))
+    c.drawString(
+        50,
+        50,
+        "Safety note: This tool does not provide diagnosis. It supports triage prioritization only.",
+    )
 
     c.showPage()
     c.save()

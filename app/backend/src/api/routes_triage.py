@@ -1,16 +1,62 @@
+import re
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from src.nlp.extractor import extract_symptom_details_from_text, merge_manual_and_extracted_symptoms
+from src.storage.db import get_latest_triage_log, insert_triage_log
 from src.triage.engine import run_triage
 from src.triage.rules_loader import load_rules
-from src.triage.schemas import ExtractedSymptom, IntakeRequest, SelectedSymptom, TriageResponse
+from src.triage.schemas import (
+    ExtractedSymptom,
+    FollowUpQuestion,
+    IntakeRequest,
+    MatchedRule,
+    SelectedSymptom,
+    TriageLogResponse,
+    TriageResponse,
+)
 
 router = APIRouter()
 
 RULES_PATH = Path(__file__).resolve().parents[4] / "rules-and-data" / "rules.json"
+CRITICAL_DISTRESS_PATTERNS = [
+    re.compile(r"\bi\s*(am|m)?\s*(gonna|ganna|gunna|going to)\s*die\b"),
+    re.compile(r"\bi\s*am\s*dying\b"),
+    re.compile(r"\bi\s*will\s*die\b"),
+]
+
+FOLLOW_UP_TEMPLATES = [
+    {
+        "question_id": "FQ1",
+        "symptom": "shortness_of_breath",
+        "question_text": "Are you currently short of breath right now?",
+        "suggested_rating_if_yes": 3,
+        "keywords": ["breath", "breathe", "air", "suffocat"],
+    },
+    {
+        "question_id": "FQ2",
+        "symptom": "chest_pain",
+        "question_text": "Do you have chest pain or chest tightness now?",
+        "suggested_rating_if_yes": 3,
+        "keywords": ["chest", "heart", "tight"],
+    },
+    {
+        "question_id": "FQ3",
+        "symptom": "confusion",
+        "question_text": "Are you confused, disoriented, or unusually drowsy?",
+        "suggested_rating_if_yes": 2,
+        "keywords": ["confus", "disorient", "drowsy", "faint", "blackout"],
+    },
+    {
+        "question_id": "FQ4",
+        "symptom": "bleeding",
+        "question_text": "Are you having active bleeding now?",
+        "suggested_rating_if_yes": 3,
+        "keywords": ["bleed", "blood"],
+    },
+]
 
 
 def _selected_symptoms(symptoms: dict[str, int]) -> list[SelectedSymptom]:
@@ -49,6 +95,51 @@ def _advice_from_rules(triage_level: str, matched: list) -> list[str]:
     return advice
 
 
+def _has_critical_distress_language(text: str) -> bool:
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return False
+    return any(pattern.search(normalized) for pattern in CRITICAL_DISTRESS_PATTERNS)
+
+
+def _build_follow_up_questions(
+    req: IntakeRequest, extracted_details: list[dict], triage_level: str
+) -> list[FollowUpQuestion]:
+    if req.clarification_completed:
+        return []
+    if triage_level == "RED":
+        return []
+    if not req.use_nlp_extraction:
+        return []
+
+    normalized = re.sub(r"\s+", " ", (req.chief_complaint_text or "").lower()).strip()
+    if not normalized:
+        return []
+
+    selected_manual_count = sum(1 for value in req.symptoms.values() if int(value) >= 1)
+    avg_confidence = (
+        sum(float(item.get("confidence", 0.0)) for item in extracted_details) / len(extracted_details)
+        if extracted_details
+        else 0.0
+    )
+    low_confidence_or_sparse = selected_manual_count == 0 and (
+        len(extracted_details) == 0 or avg_confidence < 0.82
+    )
+    if not low_confidence_or_sparse:
+        return []
+
+    questions: list[FollowUpQuestion] = []
+    for template in FOLLOW_UP_TEMPLATES:
+        keyword_hit = any(keyword in normalized for keyword in template["keywords"])
+        if keyword_hit:
+            questions.append(FollowUpQuestion(**template))
+
+    if not questions:
+        questions = [FollowUpQuestion(**template) for template in FOLLOW_UP_TEMPLATES[:2]]
+
+    return questions[:3]
+
+
 @router.post("", response_model=TriageResponse)
 def triage(req: IntakeRequest):
     session_id = uuid.uuid4().hex[:12]
@@ -64,15 +155,48 @@ def triage(req: IntakeRequest):
     merged_symptoms = merge_manual_and_extracted_symptoms(req.symptoms, extracted_map)
 
     triage_level, matched = run_triage(merged_symptoms, rules)
+    if _has_critical_distress_language(req.chief_complaint_text):
+        triage_level = "RED"
+        matched.append(
+            MatchedRule(
+                id="S1",
+                reason="Critical distress language detected in chief complaint.",
+            )
+        )
+
+    follow_up_questions = _build_follow_up_questions(req, extracted_details, triage_level)
     selected = _selected_symptoms(merged_symptoms)
     extracted = _extracted_symptoms(extracted_details)
     advice_blocks = _advice_from_rules(triage_level, matched)
+    if follow_up_questions:
+        advice_blocks.insert(0, "Additional clarification questions are recommended before final review.")
 
-    return TriageResponse(
+    response = TriageResponse(
         session_id=session_id,
         triage_level=triage_level,
         selected_symptoms=selected,
         extracted_symptoms=extracted,
         matched_rules=matched,
         advice_blocks=advice_blocks,
+        needs_clarification=bool(follow_up_questions),
+        follow_up_questions=follow_up_questions,
     )
+
+    insert_triage_log(
+        session_id=session_id,
+        triage_level=triage_level,
+        payload={
+            "request": req.model_dump(),
+            "response": response.model_dump(),
+        },
+    )
+
+    return response
+
+
+@router.get("/{session_id}", response_model=TriageLogResponse)
+def get_triage_log(session_id: str):
+    log = get_latest_triage_log(session_id)
+    if log is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return log

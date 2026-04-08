@@ -1,5 +1,6 @@
+from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Literal
 
 TriageLevel = Literal["RED", "ORANGE", "GREEN"]
 
@@ -9,6 +10,7 @@ class IntakeRequest(BaseModel):
     chief_complaint_text: str = Field(default="", max_length=2000)
     symptoms: Dict[str, int]  # 0..5 for each symptom key
     use_nlp_extraction: bool = True
+    clarification_completed: bool = False
     age_group: Optional[str] = None
     sex: Optional[str] = None
     pregnant: Optional[bool] = None
@@ -33,6 +35,13 @@ class MatchedRule(BaseModel):
     reason: str
 
 
+class FollowUpQuestion(BaseModel):
+    question_id: str
+    symptom: str
+    question_text: str
+    suggested_rating_if_yes: int = 2
+
+
 class TriageResponse(BaseModel):
     session_id: str
     triage_level: TriageLevel
@@ -40,3 +49,13 @@ class TriageResponse(BaseModel):
     extracted_symptoms: List[ExtractedSymptom] = []
     matched_rules: List[MatchedRule]
     advice_blocks: List[str]
+    needs_clarification: bool = False
+    follow_up_questions: List[FollowUpQuestion] = []
+
+
+class TriageLogResponse(BaseModel):
+    session_id: str
+    triage_level: TriageLevel
+    created_at: str
+    request_payload: Dict[str, Any]
+    response_payload: Dict[str, Any]

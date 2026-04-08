@@ -5,6 +5,8 @@ function prettyLabel(key) {
 }
 
 export default function Result({ intake, triageRes, onRestart }) {
+  const levelKey = (triageRes?.triage_level || "GREEN").toLowerCase();
+
   async function downloadPdf() {
     const payload = {
       session_id: triageRes.session_id,
@@ -36,16 +38,21 @@ export default function Result({ intake, triageRes, onRestart }) {
 
   return (
     <main className="shell">
-      <section className="card">
+      <section className={`card result-card level-${levelKey}`}>
         <div className="steps">
           <span className="step-chip">1. Patient Info</span>
           <span className="step-chip">2. Symptoms</span>
-          <span className="step-chip active">3. Result</span>
+          <span className="step-chip">3. Clarify</span>
+          <span className="step-chip active">4. Result</span>
         </div>
 
-        <h2 className="section-title" style={{ marginBottom: 0 }}>Triage Result</h2>
-        <h1 className="result-level">{triageRes.triage_level}</h1>
-        <p className="muted-line">Session ID: {triageRes.session_id}</p>
+        <div className="result-banner">
+          <div>
+            <h2 className="section-title" style={{ marginBottom: 4 }}>Triage Result</h2>
+            <p className="muted-line">Session ID: {triageRes.session_id}</p>
+          </div>
+          <h1 className="result-level">{triageRes.triage_level}</h1>
+        </div>
 
         <h3 className="section-title">Patient Profile</h3>
         <ul className="list">

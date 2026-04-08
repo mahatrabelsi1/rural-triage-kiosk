@@ -25,7 +25,6 @@ const SYMPTOM_CATEGORIES = [
 ];
 
 const SYMPTOMS = SYMPTOM_CATEGORIES.flatMap((c) => c.symptoms);
-
 const CHRONIC_OPTIONS = ["diabetes", "hypertension", "heart_problem"];
 
 function labelize(key) {
@@ -44,6 +43,8 @@ export default function Intake({ onBack, onDone }) {
   const [chronicOther, setChronicOther] = useState("");
   const [chief, setChief] = useState("");
   const [symptoms, setSymptoms] = useState(() => Object.fromEntries(SYMPTOMS.map(s => [s, 0])));
+  const [followUps, setFollowUps] = useState([]);
+  const [followAnswers, setFollowAnswers] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -67,25 +68,66 @@ export default function Intake({ onBack, onDone }) {
     }
   }
 
+  function buildPayload(overrideSymptoms, clarificationCompleted = false) {
+    const selectedChronic = Object.entries(chronicIllnesses)
+      .filter(([, checked]) => checked)
+      .map(([name]) => name);
+
+    return {
+      patient_name: patientName.trim(),
+      age_group: ageGroup || null,
+      sex: sex || null,
+      pregnant: pregnant === "" ? null : pregnant === "yes",
+      use_nlp_extraction: useNlpExtraction,
+      clarification_completed: clarificationCompleted,
+      chronic_illnesses: selectedChronic,
+      chronic_illnesses_other: chronicOther.trim(),
+      chief_complaint_text: chief,
+      symptoms: overrideSymptoms ?? symptoms,
+    };
+  }
+
   async function submit() {
     setError("");
     setLoading(true);
     try {
-      const selectedChronic = Object.entries(chronicIllnesses)
-        .filter(([, checked]) => checked)
-        .map(([name]) => name);
+      const payload = buildPayload();
+      const res = await postTriage(payload);
+      if (res.needs_clarification && res.follow_up_questions?.length) {
+        setFollowUps(res.follow_up_questions);
+        setFollowAnswers(Object.fromEntries(res.follow_up_questions.map((q) => [q.question_id, ""])));
+        setFormStep("clarify");
+        return;
+      }
+      onDone(payload, res);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Submit failed.";
+      setError(`Submit failed: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-      const payload = {
-        patient_name: patientName.trim(),
-        age_group: ageGroup || null,
-        sex: sex || null,
-        pregnant: pregnant === "" ? null : pregnant === "yes",
-        use_nlp_extraction: useNlpExtraction,
-        chronic_illnesses: selectedChronic,
-        chronic_illnesses_other: chronicOther.trim(),
-        chief_complaint_text: chief,
-        symptoms,
-      };
+  async function submitClarification() {
+    const hasUnanswered = followUps.some((q) => !followAnswers[q.question_id]);
+    if (hasUnanswered) {
+      setError("Please answer all clarification questions.");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+    try {
+      const clarifiedSymptoms = { ...symptoms };
+      for (const q of followUps) {
+        if (followAnswers[q.question_id] === "yes") {
+          const previous = Number(clarifiedSymptoms[q.symptom] || 0);
+          clarifiedSymptoms[q.symptom] = Math.max(previous, Number(q.suggested_rating_if_yes || 2));
+        }
+      }
+
+      setSymptoms(clarifiedSymptoms);
+      const payload = buildPayload(clarifiedSymptoms, true);
       const res = await postTriage(payload);
       onDone(payload, res);
     } catch (e) {
@@ -102,7 +144,8 @@ export default function Intake({ onBack, onDone }) {
         <div className="steps">
           <span className={`step-chip ${formStep === "patient" ? "active" : ""}`}>1. Patient Info</span>
           <span className={`step-chip ${formStep === "symptoms" ? "active" : ""}`}>2. Symptoms</span>
-          <span className="step-chip">3. Result</span>
+          <span className={`step-chip ${formStep === "clarify" ? "active" : ""}`}>3. Clarify</span>
+          <span className="step-chip">4. Result</span>
         </div>
 
         {formStep === "patient" && (
@@ -217,6 +260,48 @@ export default function Intake({ onBack, onDone }) {
                   {loading ? "Processing..." : "Get Triage Result"}
                 </button>
               )}
+            </div>
+          </>
+        )}
+
+        {formStep === "clarify" && (
+          <>
+            <h2 className="section-title">Clarification Questions</h2>
+            <p className="muted-line">
+              Please answer these quick safety questions before final triage.
+            </p>
+
+            <div className="clarify-list">
+              {followUps.map((q) => (
+                <div key={q.question_id} className="clarify-item">
+                  <p>{q.question_text}</p>
+                  <div className="cta-row">
+                    <button
+                      type="button"
+                      className={`btn-secondary ${followAnswers[q.question_id] === "yes" ? "btn-choice-active" : ""}`}
+                      onClick={() => setFollowAnswers((prev) => ({ ...prev, [q.question_id]: "yes" }))}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn-secondary ${followAnswers[q.question_id] === "no" ? "btn-choice-active" : ""}`}
+                      onClick={() => setFollowAnswers((prev) => ({ ...prev, [q.question_id]: "no" }))}
+                    >
+                      No
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {error && <p className="error-text">{error}</p>}
+
+            <div className="cta-row" style={{ marginTop: 18 }}>
+              <button className="btn-secondary" onClick={() => setFormStep("symptoms")}>Back To Symptoms</button>
+              <button className="btn-primary" onClick={submitClarification} disabled={loading}>
+                {loading ? "Rechecking..." : "Finish Triage"}
+              </button>
             </div>
           </>
         )}

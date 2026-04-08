@@ -20,6 +20,7 @@ __pycache__/
 .mypy_cache/
 .coverage
 htmlcov/
+app/backend/outputs/
 
 # Environment / local config
 .env

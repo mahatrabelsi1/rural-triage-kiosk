@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import AvatarAssistant from "./components/AvatarAssistant";
 import Intake from "./pages/Intake";
 import Result from "./pages/Result";
 import Welcome from "./pages/Welcome";
@@ -9,12 +10,12 @@ export default function App() {
   const [intake, setIntake] = useState(null);
   const [triageRes, setTriageRes] = useState(null);
 
+  let page = null;
   if (step === "landing") {
-    return <Welcome onNext={() => setStep("intake")} />;
+    page = <Welcome onNext={() => setStep("intake")} />;
   }
-
   if (step === "intake") {
-    return (
+    page = (
       <Intake
         onBack={() => setStep("landing")}
         onDone={(data, res) => {
@@ -25,16 +26,26 @@ export default function App() {
       />
     );
   }
+  if (step === "result") {
+    page = (
+      <Result
+        intake={intake}
+        triageRes={triageRes}
+        onRestart={() => {
+          setStep("landing");
+          setIntake(null);
+          setTriageRes(null);
+        }}
+      />
+    );
+  }
 
   return (
-    <Result
-      intake={intake}
-      triageRes={triageRes}
-      onRestart={() => {
-        setStep("landing");
-        setIntake(null);
-        setTriageRes(null);
-      }}
-    />
+    <div className="split-layout">
+      <div className="split-triage">{page}</div>
+      <aside className="split-video">
+        <AvatarAssistant />
+      </aside>
+    </div>
   );
 }
