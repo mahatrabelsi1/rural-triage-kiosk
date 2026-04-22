@@ -1,28 +1,44 @@
 # Rural Triage Kiosk
 
-Rural Triage Kiosk is a local clinic intake tool that helps staff capture patient details, rate symptoms, assign a triage priority, and generate a doctor-facing PDF summary. It is designed as a prioritization support system for rural or low-resource clinic workflows, not as a diagnostic tool.
+Rural Triage Kiosk is a clinic intake and prioritization app for low-resource or rural care settings. Staff can record patient details, combine manually selected symptoms with free-text complaint extraction, assign a triage level, and generate a doctor-facing PDF summary.
 
-## What It Does
+This project is a triage support tool, not a diagnostic system. It should help staff organize urgency and communicate findings clearly, but it must not replace clinical judgment.
 
-- Collects patient name, age group, sex, pregnancy status, chronic illness information, and chief complaint text.
-- Lets staff rate symptoms from 0 to 5 across respiratory, digestive, neurologic, and urgent categories.
-- Uses a simple local keyword-based NLP extractor to detect symptoms from the chief complaint text.
-- Merges manually entered symptoms with extracted symptoms while keeping the higher severity score.
-- Applies auditable JSON triage rules to classify cases as `RED`, `ORANGE`, or `GREEN`.
-- Triggers safety clarification questions when the complaint is vague or low-confidence.
-- Forces `RED` priority for critical distress language such as "I am dying" or common typo variants.
-- Logs triage sessions in SQLite for later lookup.
-- Generates a doctor summary PDF with patient snapshot, complaint, selected symptoms, matched rule reasons, and guidance.
-- Shows a kiosk-style React interface with a virtual nurse assistant video panel.
+## Highlights
 
-## Tech Stack
+- Captures patient profile details, chief complaint text, and symptom ratings in a kiosk-style UI.
+- Uses rule-based triage logic from auditable JSON rules in `rules-and-data/rules.json`.
+- Combines manual symptom input with complaint-text extraction.
+- Adds a Hugging Face biomedical NER pass for extra symptom/entity detection when enabled.
+- Triggers follow-up clarification questions when complaint text is vague or low confidence.
+- Forces escalation to `RED` when critical distress language is detected.
+- Builds structured advice blocks for staff-facing guidance.
+- Stores triage sessions in SQLite for later lookup.
+- Generates a printable PDF summary for the clinician.
 
-- Frontend: React 18, Vite, CSS
+## Stack
+
+- Frontend: React 18, Vite
 - Backend: FastAPI, Pydantic, Uvicorn
-- Rules: JSON rules in `rules-and-data/rules.json`
+- NLP: local extractor plus optional `transformers` / `torch` biomedical NER pipeline
 - Storage: SQLite
-- PDF generation: ReportLab
+- PDF: ReportLab
 - Tests: Python `unittest`
+
+## How It Works
+
+1. Front desk staff enter patient information and symptom severity ratings.
+2. The backend optionally analyzes the chief complaint text to detect symptom mentions and named entities.
+3. Manual and extracted symptom scores are merged conservatively.
+4. JSON rules determine the triage level: `RED`, `ORANGE`, or `GREEN`.
+5. The system returns matched rule reasons, follow-up prompts, extracted entities, and guidance blocks.
+6. A PDF handoff summary can be generated for the clinician.
+
+## Triage Levels
+
+- `RED`: urgent clinical review now
+- `ORANGE`: prompt same-day review
+- `GREEN`: lower immediate risk based on current inputs, with monitoring guidance
 
 ## Project Structure
 
@@ -31,135 +47,102 @@ rural-triage-kiosk/
 |-- app/
 |   |-- backend/
 |   |   |-- src/
-|   |   |   |-- api/          # FastAPI routes for triage and PDF generation
-|   |   |   |-- advice/       # Advice catalog and advice engine
-|   |   |   |-- nlp/          # Local symptom text extraction
-|   |   |   |-- pdf/          # Doctor PDF generator
-|   |   |   |-- storage/      # SQLite logging
-|   |   |   `-- triage/       # Schemas, rule loading, and triage engine
-|   |   |-- tests/            # Backend safety, logging, and NLP tests
+|   |   |   |-- advice/       # Advice catalog and guidance assembly
+|   |   |   |-- api/          # FastAPI routes
+|   |   |   |-- nlp/          # Complaint text extraction
+|   |   |   |-- pdf/          # PDF generation
+|   |   |   |-- storage/      # SQLite persistence
+|   |   |   `-- triage/       # Schemas, rules, and engine
+|   |   |-- tests/
+|   |   |-- .env.example
 |   |   `-- requirements.txt
 |   `-- frontend/
-|       |-- public/assets/    # Virtual nurse video asset
+|       |-- public/assets/
 |       |-- src/
-|       |   |-- api/          # Frontend API client
-|       |   |-- components/   # Virtual nurse assistant component
-|       |   `-- pages/        # Welcome, intake, and result screens
+|       |   |-- api/
+|       |   |-- components/
+|       |   `-- pages/
 |       `-- package.json
 |-- rules-and-data/
-|   `-- rules.json            # Auditable triage rules
+|   `-- rules.json
+|-- .gitignore
 `-- README.md
 ```
 
-## Triage Levels
+## Local Setup
 
-- `RED`: urgent clinical review. Triggered by severe symptoms, high-risk symptoms, dangerous combinations, or critical distress language.
-- `ORANGE`: prompt same-day clinical review. Triggered by moderate symptoms or concerning combinations.
-- `GREEN`: monitor symptoms and seek care if severity increases.
-
-Safety note: this tool supports triage prioritization only. It does not diagnose patients, replace a clinician, or make treatment decisions.
-
-## Run Locally
-
-Open two terminals: one for the backend and one for the frontend.
+Run the backend and frontend in separate terminals.
 
 ### Backend
 
-```bash
+```powershell
 cd app/backend
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 uvicorn src.main:app --reload --port 8000
 ```
 
-The backend runs at:
+Backend URLs:
 
-```text
-http://localhost:8000
-```
+- App: `http://localhost:8000`
+- Health check: `http://localhost:8000/health`
 
-Health check:
+Notes:
 
-```text
-http://localhost:8000/health
-```
+- `app/backend/.env.example` is included as a starter, but no required environment variables are defined yet.
+- The first use of the Hugging Face biomedical pipeline may download model files locally, depending on your environment and cache state.
 
 ### Frontend
 
-```bash
+```powershell
 cd app/frontend
 npm install
 npm run dev
 ```
 
-The frontend runs at:
+Frontend URL:
 
-```text
-http://localhost:5173
-```
+- App: `http://localhost:5173`
 
-## API Endpoints
+## API
 
-- `GET /health`: checks that the FastAPI server is running.
-- `POST /triage`: submits patient intake data and returns the triage result.
-- `GET /triage/{session_id}`: retrieves a logged triage session.
-- `POST /pdf`: generates and downloads a doctor summary PDF.
+- `GET /health` checks backend availability.
+- `POST /triage` submits intake data and returns triage results, extracted entities, matched rules, and advice blocks.
+- `GET /triage/{session_id}` fetches a previously logged session.
+- `POST /pdf` generates the doctor-facing summary PDF.
 
-## Run Tests
+## Testing
 
-From the backend folder:
+From `app/backend`:
 
-```bash
-cd app/backend
+```powershell
 python -m unittest discover tests
 ```
 
-The tests cover:
+Current tests cover:
 
-- Symptom extraction and negation handling.
-- Manual and extracted symptom merging.
-- Critical distress language safety override.
-- Follow-up clarification logic.
-- SQLite logging and session retrieval.
+- Rule-based triage behavior
+- Distress-language escalation
+- Symptom extraction and merging
+- Advice block generation
+- Hugging Face extractor normalization
+- SQLite logging and retrieval
 
-## Runtime Outputs
+## Runtime Artifacts
 
-The backend writes runtime files under:
+Generated runtime files are written under `app/backend/outputs/`. This directory can contain local databases and PDF exports and should stay out of version control.
 
-```text
-app/backend/outputs/
-```
+## GitHub Remote
 
-That folder may contain local SQLite databases and generated PDFs. These are runtime artifacts and should not be committed to GitHub.
-
-## Push To GitHub
-
-This project already has a remote configured:
+The repository is already connected to:
 
 ```text
 origin https://github.com/mahatrabelsi1/rural-triage-kiosk.git
 ```
 
-Use these commands from the project root:
+If tracked cache files ever appear again, remove them from the Git index with:
 
 ```bash
-git status
-git add README.md .gitignore
-git add app/backend/src/main.py app/backend/src/api/routes_pdf.py app/backend/src/api/routes_triage.py
-git add app/backend/src/nlp/extractor.py app/backend/src/pdf/generator.py app/backend/src/storage/db.py
-git add app/backend/src/triage/engine.py app/backend/src/triage/rules_loader.py app/backend/src/triage/schemas.py
-git add app/backend/tests app/frontend/src app/frontend/public app/frontend/package.json app/frontend/package-lock.json app/frontend/index.html app/frontend/vite.config.js rules-and-data
-git status
-git commit -m "Improve rural triage kiosk documentation"
-git push origin main
+git rm -r --cached app/backend/src/__pycache__ app/backend/tests/__pycache__
 ```
-
-If Git still shows tracked `__pycache__` files, remove them from Git tracking before committing:
-
-```bash
-git rm -r --cached app/backend/src/__pycache__ app/backend/src/api/__pycache__ app/backend/src/pdf/__pycache__ app/backend/src/triage/__pycache__
-git status
-```
-
-If this is your first push and Git asks you to log in, use your GitHub username and a GitHub personal access token instead of your account password.

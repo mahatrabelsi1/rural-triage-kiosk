@@ -15,6 +15,12 @@ export default function Result({ intake, triageRes, onRestart }) {
       chief_complaint_text: intake.chief_complaint_text,
       matched_reasons: triageRes.matched_rules.map((r) => `${r.id}: ${r.reason}`),
       selected_symptoms: triageRes.selected_symptoms.map((s) => `${prettyLabel(s.symptom)} = ${s.rating}/5`),
+      extracted_symptoms: (triageRes.extracted_symptoms || []).map((s) =>
+        `${prettyLabel(s.symptom)} = ${s.rating}/5 (${Math.round((s.confidence || 0) * 100)}% confidence, phrase: "${s.source_phrase || "n/a"}")`
+      ),
+      extracted_entities: (triageRes.extracted_entities || []).map((entity) =>
+        `${entity.text} (${entity.label}, ${Math.round((entity.score || 0) * 100)}% confidence)`
+      ),
       advice_blocks: triageRes.advice_blocks,
       age_group: intake.age_group,
       sex: intake.sex,
@@ -81,6 +87,15 @@ export default function Result({ intake, triageRes, onRestart }) {
               {" "}({Math.round((s.confidence || 0) * 100)}% confidence, phrase: "{s.source_phrase || "n/a"}")
             </li>
           )) : <li>No additional symptoms extracted</li>}
+        </ul>
+
+        <h3 className="section-title">Biomedical Entities</h3>
+        <ul className="list">
+          {triageRes.extracted_entities?.length ? triageRes.extracted_entities.map((entity, index) => (
+            <li key={`${entity.text}-${index}`}>
+              {entity.text} ({entity.label}, {Math.round((entity.score || 0) * 100)}% confidence)
+            </li>
+          )) : <li>No biomedical entities extracted</li>}
         </ul>
 
         <h3 className="section-title">Matched Rule Reasons</h3>

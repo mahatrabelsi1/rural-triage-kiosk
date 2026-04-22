@@ -58,6 +58,27 @@ def _draw_section_title(c: canvas.Canvas, title: str, y: int) -> int:
     return y - 18
 
 
+def _draw_footer(c: canvas.Canvas, page_width: float) -> None:
+    c.setStrokeColor(colors.HexColor("#D3E6EA"))
+    c.line(50, 64, page_width - 50, 64)
+    c.setFont("Helvetica-Oblique", 9)
+    c.setFillColor(colors.HexColor("#55727E"))
+    c.drawString(
+        50,
+        50,
+        "Safety note: This tool does not provide diagnosis. It supports triage prioritization only.",
+    )
+
+
+def _ensure_space(c: canvas.Canvas, y: int, needed: int, page_width: float, page_height: float) -> int:
+    if y >= needed:
+        return y
+
+    _draw_footer(c, page_width)
+    c.showPage()
+    return page_height - 60
+
+
 def generate_doctor_pdf(
     out_dir: Path,
     session_id: str,
@@ -66,6 +87,8 @@ def generate_doctor_pdf(
     chief_complaint_text: str,
     matched_reasons: list[str],
     selected_symptoms: list[str],
+    extracted_symptoms: list[str],
+    extracted_entities: list[str],
     advice_blocks: list[str],
     patient_meta: dict,
 ) -> Path:
@@ -99,6 +122,7 @@ def generate_doctor_pdf(
     y = page_height - 184
 
     # Patient Snapshot
+    y = _ensure_space(c, y, 130, page_width, page_height)
     y = _draw_section_title(c, "Patient Snapshot", y)
     c.setFillColor(colors.HexColor("#13313D"))
     c.setFont("Helvetica", 10)
@@ -110,6 +134,7 @@ def generate_doctor_pdf(
 
     # Chief complaint
     y -= 8
+    y = _ensure_space(c, y, 140, page_width, page_height)
     y = _draw_section_title(c, "Chief Complaint (verbatim)", y)
     complaint = chief_complaint_text.strip() or "N/A"
     c.setFont("Helvetica", 10)
@@ -118,6 +143,7 @@ def generate_doctor_pdf(
 
     # Selected symptoms
     y -= 8
+    y = _ensure_space(c, y, 170, page_width, page_height)
     y = _draw_section_title(c, "Selected Symptoms (1-5)", y)
     c.setFont("Helvetica", 10)
     c.setFillColor(colors.HexColor("#13313D"))
@@ -126,8 +152,32 @@ def generate_doctor_pdf(
     else:
         y = _draw_bullet_list(c, ["None selected"], y, max_items=1)
 
+    # NLP summary
+    y -= 8
+    y = _ensure_space(c, y, 190, page_width, page_height)
+    y = _draw_section_title(c, "NLP Summary", y)
+    c.setFont("Helvetica", 10)
+    c.setFillColor(colors.HexColor("#13313D"))
+    if extracted_symptoms:
+        y = _draw_bullet_list(c, extracted_symptoms, y, max_items=12)
+    else:
+        y = _draw_bullet_list(c, ["No normalized symptoms extracted from free text."], y, max_items=1)
+
+    y -= 6
+    y = _ensure_space(c, y, 145, page_width, page_height)
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#13313D"))
+    c.drawString(50, y, "Detected biomedical entities")
+    y -= 16
+    c.setFont("Helvetica", 10)
+    if extracted_entities:
+        y = _draw_bullet_list(c, extracted_entities, y, max_items=12)
+    else:
+        y = _draw_bullet_list(c, ["No biomedical entities extracted."], y, max_items=1)
+
     # Matched reasons
     y -= 8
+    y = _ensure_space(c, y, 170, page_width, page_height)
     y = _draw_section_title(c, "Matched Rule Reasons", y)
     c.setFont("Helvetica", 10)
     if matched_reasons:
@@ -137,21 +187,12 @@ def generate_doctor_pdf(
 
     # Guidance
     y -= 8
+    y = _ensure_space(c, y, 170, page_width, page_height)
     y = _draw_section_title(c, "Guidance / Advice", y)
     c.setFont("Helvetica", 10)
     y = _draw_bullet_list(c, advice_blocks, y, max_items=12)
 
-    # Footer note
-    c.setStrokeColor(colors.HexColor("#D3E6EA"))
-    c.line(50, 64, page_width - 50, 64)
-    c.setFont("Helvetica-Oblique", 9)
-    c.setFillColor(colors.HexColor("#55727E"))
-    c.drawString(
-        50,
-        50,
-        "Safety note: This tool does not provide diagnosis. It supports triage prioritization only.",
-    )
-
+    _draw_footer(c, page_width)
     c.showPage()
     c.save()
     return pdf_path

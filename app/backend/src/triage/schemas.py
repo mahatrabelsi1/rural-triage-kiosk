@@ -30,6 +30,12 @@ class ExtractedSymptom(BaseModel):
     source_phrase: str
 
 
+class ExtractedEntity(BaseModel):
+    text: str
+    label: str
+    score: float
+
+
 class MatchedRule(BaseModel):
     id: str
     reason: str
@@ -47,6 +53,7 @@ class TriageResponse(BaseModel):
     triage_level: TriageLevel
     selected_symptoms: List[SelectedSymptom]
     extracted_symptoms: List[ExtractedSymptom] = []
+    extracted_entities: List[ExtractedEntity] = []
     matched_rules: List[MatchedRule]
     advice_blocks: List[str]
     needs_clarification: bool = False

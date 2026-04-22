@@ -18,6 +18,8 @@ class PdfRequest(BaseModel):
     chief_complaint_text: str = ""
     matched_reasons: list[str] = []
     selected_symptoms: list[str] = []
+    extracted_symptoms: list[str] = []
+    extracted_entities: list[str] = []
     advice_blocks: list[str] = []
     age_group: str | None = None
     sex: str | None = None
@@ -40,6 +42,8 @@ def make_pdf(req: PdfRequest):
         chief_complaint_text=req.chief_complaint_text,
         matched_reasons=req.matched_reasons,
         selected_symptoms=req.selected_symptoms,
+        extracted_symptoms=req.extracted_symptoms,
+        extracted_entities=req.extracted_entities,
         advice_blocks=req.advice_blocks,
         patient_meta={
             "age_group": req.age_group,

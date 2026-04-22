@@ -4,11 +4,14 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
+from src.advice.advice_engine import build_advice_blocks, load_catalog
 from src.nlp.extractor import extract_symptom_details_from_text, merge_manual_and_extracted_symptoms
+from src.nlp.hf_extractor import process_complaint_text
 from src.storage.db import get_latest_triage_log, insert_triage_log
 from src.triage.engine import run_triage
 from src.triage.rules_loader import load_rules
 from src.triage.schemas import (
+    ExtractedEntity,
     ExtractedSymptom,
     FollowUpQuestion,
     IntakeRequest,
@@ -21,6 +24,7 @@ from src.triage.schemas import (
 router = APIRouter()
 
 RULES_PATH = Path(__file__).resolve().parents[4] / "rules-and-data" / "rules.json"
+ADVICE_CATALOG_PATH = Path(__file__).resolve().parents[1] / "advice" / "advice_catalog.json"
 CRITICAL_DISTRESS_PATTERNS = [
     re.compile(r"\bi\s*(am|m)?\s*(gonna|ganna|gunna|going to)\s*die\b"),
     re.compile(r"\bi\s*am\s*dying\b"),
@@ -79,20 +83,15 @@ def _extracted_symptoms(details: list[dict]) -> list[ExtractedSymptom]:
     ]
 
 
-def _advice_from_rules(triage_level: str, matched: list) -> list[str]:
-    if matched:
-        advice = [f"{m.id}: {m.reason}" for m in matched]
-    else:
-        advice = []
-
-    if triage_level == "RED":
-        advice.append("Immediate clinical review is recommended.")
-    elif triage_level == "ORANGE":
-        advice.append("Prompt same-day clinical review is recommended.")
-    else:
-        advice.append("Monitor symptoms and seek care if severity increases.")
-        advice.append("Drink water and avoid taking medicine without doctor advice.")
-    return advice
+def _extracted_entities(items: list[dict]) -> list[ExtractedEntity]:
+    return [
+        ExtractedEntity(
+            text=str(item.get("text", "")),
+            label=str(item.get("label", "")),
+            score=float(item.get("score", 0.0)),
+        )
+        for item in items
+    ]
 
 
 def _has_critical_distress_language(text: str) -> bool:
@@ -146,16 +145,29 @@ def triage(req: IntakeRequest):
 
     rules = load_rules(RULES_PATH)
     allowed_symptoms = rules.get("symptoms", req.symptoms.keys())
+    hf_result = process_complaint_text(req.chief_complaint_text) if req.use_nlp_extraction else {
+        "entities": [],
+        "symptom_scores": {},
+    }
     extracted_details = (
         extract_symptom_details_from_text(req.chief_complaint_text, allowed_symptoms)
         if req.use_nlp_extraction
         else []
     )
+    hf_symptom_scores = {
+        symptom: 1
+        for symptom, score in hf_result["symptom_scores"].items()
+        if symptom in allowed_symptoms and float(score) >= 0.5
+    }
     extracted_map = {item["symptom"]: int(item["rating"]) for item in extracted_details}
+    extracted_map.update(
+        {symptom: max(int(extracted_map.get(symptom, 0)), rating) for symptom, rating in hf_symptom_scores.items()}
+    )
     merged_symptoms = merge_manual_and_extracted_symptoms(req.symptoms, extracted_map)
 
     triage_level, matched = run_triage(merged_symptoms, rules)
-    if _has_critical_distress_language(req.chief_complaint_text):
+    distress_override = _has_critical_distress_language(req.chief_complaint_text)
+    if distress_override:
         triage_level = "RED"
         matched.append(
             MatchedRule(
@@ -167,15 +179,22 @@ def triage(req: IntakeRequest):
     follow_up_questions = _build_follow_up_questions(req, extracted_details, triage_level)
     selected = _selected_symptoms(merged_symptoms)
     extracted = _extracted_symptoms(extracted_details)
-    advice_blocks = _advice_from_rules(triage_level, matched)
-    if follow_up_questions:
-        advice_blocks.insert(0, "Additional clarification questions are recommended before final review.")
+    advice_catalog = load_catalog(ADVICE_CATALOG_PATH)
+    advice_blocks = build_advice_blocks(
+        triage_level=triage_level,
+        symptoms=merged_symptoms,
+        matched_reasons=[f"{m.id}: {m.reason}" for m in matched],
+        catalog=advice_catalog,
+        needs_clarification=bool(follow_up_questions),
+        distress_override=distress_override,
+    )
 
     response = TriageResponse(
         session_id=session_id,
         triage_level=triage_level,
         selected_symptoms=selected,
         extracted_symptoms=extracted,
+        extracted_entities=_extracted_entities(hf_result["entities"]),
         matched_rules=matched,
         advice_blocks=advice_blocks,
         needs_clarification=bool(follow_up_questions),

@@ -3,4 +3,6 @@ uvicorn[standard]==0.30.6
 pydantic>=2.11,<3
 python-multipart==0.0.9
 reportlab==4.2.2
+transformers>=4.46,<5
+torch>=2.4,<3
 
