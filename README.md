@@ -132,12 +132,19 @@ rural-triage-kiosk/
 
 ## Local Setup
 
-Run backend and frontend in separate terminals.
+Run backend and frontend in separate terminals. All commands below assume you start from the **repo root** (`rural-triage-kiosk/`).
+
+> **If your `.venv` was created at a different path** (e.g. after moving the repo folder), delete it and recreate it — Python venvs store absolute paths internally and break when moved:
+> ```powershell
+> Remove-Item -Recurse -Force app\backend\.venv
+> ```
+> Then follow the setup steps below.
 
 ### Backend
 
 ```powershell
-cd app/backend
+# From repo root:
+cd app\backend
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -157,7 +164,8 @@ uvicorn src.main:app --reload --port 8000
 ### Frontend
 
 ```powershell
-cd app/frontend
+# From repo root:
+cd app\frontend
 npm install
 npm run dev
 ```
