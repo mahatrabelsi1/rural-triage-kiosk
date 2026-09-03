@@ -47,6 +47,35 @@ class TestTriageLogging(unittest.TestCase):
             routes_triage.get_triage_log("not-found")
         self.assertEqual(ctx.exception.status_code, 404)
 
+    def test_recent_queue_is_sorted_by_urgency(self):
+        green = IntakeRequest(
+            patient_name="Green",
+            chief_complaint_text="routine check",
+            symptoms={},
+            use_nlp_extraction=False,
+        )
+        red = IntakeRequest(
+            patient_name="Red",
+            chief_complaint_text="severe chest pain",
+            symptoms={"chest_pain": 3},
+            use_nlp_extraction=False,
+        )
+        orange = IntakeRequest(
+            patient_name="Orange",
+            chief_complaint_text="fever",
+            symptoms={"fever": 2},
+            use_nlp_extraction=False,
+        )
+
+        routes_triage.triage(green)
+        routes_triage.triage(red)
+        routes_triage.triage(orange)
+
+        queue = routes_triage.recent_triage_queue()
+
+        self.assertEqual([item["triage_level"] for item in queue[:3]], ["RED", "ORANGE", "GREEN"])
+        self.assertEqual(queue[0]["patient_name"], "Red")
+
 
 if __name__ == "__main__":
     unittest.main()

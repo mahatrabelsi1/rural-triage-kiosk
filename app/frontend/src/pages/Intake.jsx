@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { postTriage } from "../api/client";
 
 const SYMPTOM_CATEGORIES = [
@@ -31,7 +31,7 @@ function labelize(key) {
   return key.replaceAll("_", " ");
 }
 
-export default function Intake({ onBack, onDone }) {
+export default function Intake({ onBack, onDone, onNarration }) {
   const [formStep, setFormStep] = useState("patient");
   const [categoryIndex, setCategoryIndex] = useState(0);
   const [patientName, setPatientName] = useState("");
@@ -51,6 +51,19 @@ export default function Intake({ onBack, onDone }) {
   function setSymptom(k, v) {
     setSymptoms(prev => ({ ...prev, [k]: Number(v) }));
   }
+
+  useEffect(() => {
+    if (!onNarration) return;
+    if (formStep === "patient") {
+      onNarration("Patient information! Great, let us start with the patient profile and chief complaint.");
+    }
+    if (formStep === "symptoms") {
+      onNarration(`Symptoms rating! Now we are checking ${SYMPTOM_CATEGORIES[categoryIndex].label}. You are doing great!`);
+    }
+    if (formStep === "clarify") {
+      onNarration("Clarification questions! Almost done. Please answer these quick safety questions before final triage.");
+    }
+  }, [formStep, categoryIndex, onNarration]);
 
   function toggleChronic(k) {
     setChronicIllnesses(prev => ({ ...prev, [k]: !prev[k] }));

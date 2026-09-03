@@ -63,3 +63,40 @@ def get_latest_triage_log(session_id: str) -> dict[str, Any] | None:
         "request_payload": payload.get("request", {}),
         "response_payload": payload.get("response", {}),
     }
+
+
+def list_recent_triage_logs(limit: int = 50) -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT session_id, triage_level, created_at, payload_json
+            FROM triage_logs
+            ORDER BY
+                CASE triage_level
+                    WHEN 'RED' THEN 0
+                    WHEN 'ORANGE' THEN 1
+                    ELSE 2
+                END,
+                created_at DESC,
+                id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        payload = json.loads(row["payload_json"])
+        request = payload.get("request", {})
+        items.append(
+            {
+                "session_id": row["session_id"],
+                "triage_level": row["triage_level"],
+                "created_at": row["created_at"],
+                "patient_name": request.get("patient_name", ""),
+                "age_group": request.get("age_group"),
+                "sex": request.get("sex"),
+                "chief_complaint_text": request.get("chief_complaint_text", ""),
+            }
+        )
+    return items

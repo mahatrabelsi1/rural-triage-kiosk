@@ -14,7 +14,7 @@ class IntakeRequest(BaseModel):
     age_group: Optional[str] = None
     sex: Optional[str] = None
     pregnant: Optional[bool] = None
-    chronic_illnesses: List[str] = []
+    chronic_illnesses: List[str] = Field(default_factory=list)
     chronic_illnesses_other: str = Field(default="", max_length=500)
 
 
@@ -52,12 +52,12 @@ class TriageResponse(BaseModel):
     session_id: str
     triage_level: TriageLevel
     selected_symptoms: List[SelectedSymptom]
-    extracted_symptoms: List[ExtractedSymptom] = []
-    extracted_entities: List[ExtractedEntity] = []
+    extracted_symptoms: List[ExtractedSymptom] = Field(default_factory=list)
+    extracted_entities: List[ExtractedEntity] = Field(default_factory=list)
     matched_rules: List[MatchedRule]
     advice_blocks: List[str]
     needs_clarification: bool = False
-    follow_up_questions: List[FollowUpQuestion] = []
+    follow_up_questions: List[FollowUpQuestion] = Field(default_factory=list)
 
 
 class TriageLogResponse(BaseModel):
@@ -66,3 +66,13 @@ class TriageLogResponse(BaseModel):
     created_at: str
     request_payload: Dict[str, Any]
     response_payload: Dict[str, Any]
+
+
+class TriageQueueItem(BaseModel):
+    session_id: str
+    triage_level: TriageLevel
+    created_at: str
+    patient_name: str = ""
+    age_group: Optional[str] = None
+    sex: Optional[str] = None
+    chief_complaint_text: str = ""

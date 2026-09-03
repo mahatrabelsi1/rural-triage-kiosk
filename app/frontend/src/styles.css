@@ -113,6 +113,12 @@ body {
   gap: 10px;
 }
 
+.role-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 button,
 .btn {
   border: 0;
@@ -364,6 +370,101 @@ textarea {
   color: #0f6b5a;
 }
 
+.queue-card {
+  display: grid;
+  gap: 16px;
+}
+
+.queue-head {
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.queue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.queue-item {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-left: 6px solid #8cbfd6;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfeff 0%, #f3f8fc 100%);
+  padding: 13px;
+}
+
+.queue-item.level-red {
+  border-left-color: var(--danger);
+}
+
+.queue-item.level-orange {
+  border-left-color: var(--orange);
+}
+
+.queue-item.level-green {
+  border-left-color: var(--green);
+}
+
+.queue-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.queue-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border-radius: 10px;
+  background: #edf5f9;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+}
+
+.queue-item.level-red .queue-level {
+  color: var(--danger);
+  background: #f9e7e5;
+}
+
+.queue-item.level-orange .queue-level {
+  color: var(--orange);
+  background: #fff1df;
+}
+
+.queue-item.level-green .queue-level {
+  color: var(--green);
+  background: #e3f4ec;
+}
+
+.queue-main h3 {
+  margin: 0 0 3px;
+  font-size: 1rem;
+}
+
+.queue-main p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.queue-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 7px;
+  color: #557083;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .avatar-assistant {
   width: min(100%, 604px);
   border-radius: 20px;
@@ -408,6 +509,19 @@ textarea {
   padding: 6px 9px;
   background: #edf5f9;
   border-top: 1px solid #cbe0ea;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.voice-button {
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 0.7rem;
+  color: #fff;
+  background: var(--accent);
+  box-shadow: none;
 }
 
 @media (max-width: 760px) {
@@ -426,6 +540,16 @@ textarea {
   .result-banner {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .queue-head,
+  .queue-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .queue-main {
+    grid-template-columns: 1fr;
   }
 
   .split-layout {

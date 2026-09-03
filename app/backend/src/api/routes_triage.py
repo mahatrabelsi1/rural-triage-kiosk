@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from src.advice.advice_engine import build_advice_blocks, load_catalog
 from src.nlp.extractor import extract_symptom_details_from_text, merge_manual_and_extracted_symptoms
 from src.nlp.hf_extractor import process_complaint_text
-from src.storage.db import get_latest_triage_log, insert_triage_log
+from src.storage.db import get_latest_triage_log, insert_triage_log, list_recent_triage_logs
 from src.triage.engine import run_triage
 from src.triage.rules_loader import load_rules
 from src.triage.schemas import (
@@ -18,6 +18,7 @@ from src.triage.schemas import (
     MatchedRule,
     SelectedSymptom,
     TriageLogResponse,
+    TriageQueueItem,
     TriageResponse,
 )
 
@@ -101,6 +102,70 @@ def _has_critical_distress_language(text: str) -> bool:
     return any(pattern.search(normalized) for pattern in CRITICAL_DISTRESS_PATTERNS)
 
 
+def _highest_level(current: str, candidate: str) -> str:
+    rank = {"GREEN": 0, "ORANGE": 1, "RED": 2}
+    return candidate if rank[candidate] > rank[current] else current
+
+
+def _has_chronic(req: IntakeRequest, keyword: str) -> bool:
+    values = [*req.chronic_illnesses, req.chronic_illnesses_other]
+    return any(keyword in (value or "").lower() for value in values)
+
+
+def _apply_risk_factor_escalation(
+    req: IntakeRequest, symptoms: dict[str, int], triage_level: str, matched: list[MatchedRule]
+) -> str:
+    level = triage_level
+    age_group = (req.age_group or "").lower()
+    pregnant = bool(req.pregnant)
+    has_diabetes = _has_chronic(req, "diabetes")
+    has_heart_problem = _has_chronic(req, "heart")
+
+    if pregnant and int(symptoms.get("pregnancy_bleeding", 0)) >= 1:
+        level = _highest_level(level, "RED")
+        matched.append(MatchedRule(id="RF1", reason="Pregnancy with bleeding reported."))
+
+    if age_group == "elderly":
+        elderly_risk_symptoms = [
+            "chest_pain",
+            "shortness_of_breath",
+            "confusion",
+            "fainting",
+            "dehydration_signs",
+            "severe_weakness",
+        ]
+        if any(int(symptoms.get(symptom, 0)) >= 2 for symptom in elderly_risk_symptoms):
+            level = _highest_level(level, "RED")
+            matched.append(MatchedRule(id="RF2", reason="Elderly patient with moderate or severe high-risk symptom."))
+        elif any(int(symptoms.get(symptom, 0)) >= 1 for symptom in elderly_risk_symptoms):
+            level = _highest_level(level, "ORANGE")
+            matched.append(MatchedRule(id="RF3", reason="Elderly patient with high-risk symptom present."))
+
+    if has_diabetes:
+        diabetes_risk = max(
+            int(symptoms.get("severe_weakness", 0)),
+            int(symptoms.get("dehydration_signs", 0)),
+            int(symptoms.get("vomiting", 0)),
+            int(symptoms.get("diarrhea", 0)),
+        )
+        if diabetes_risk >= 3:
+            level = _highest_level(level, "RED")
+            matched.append(MatchedRule(id="RF4", reason="Diabetes with severe weakness, dehydration, vomiting, or diarrhea."))
+        elif diabetes_risk >= 2:
+            level = _highest_level(level, "ORANGE")
+            matched.append(MatchedRule(id="RF5", reason="Diabetes with moderate weakness, dehydration, vomiting, or diarrhea."))
+
+    if has_heart_problem and int(symptoms.get("chest_pain", 0)) >= 1:
+        if int(symptoms.get("chest_pain", 0)) >= 2:
+            level = _highest_level(level, "RED")
+            matched.append(MatchedRule(id="RF6", reason="Heart problem with moderate or worse chest pain."))
+        else:
+            level = _highest_level(level, "ORANGE")
+            matched.append(MatchedRule(id="RF7", reason="Heart problem with chest pain reported."))
+
+    return level
+
+
 def _build_follow_up_questions(
     req: IntakeRequest, extracted_details: list[dict], triage_level: str
 ) -> list[FollowUpQuestion]:
@@ -166,6 +231,7 @@ def triage(req: IntakeRequest):
     merged_symptoms = merge_manual_and_extracted_symptoms(req.symptoms, extracted_map)
 
     triage_level, matched = run_triage(merged_symptoms, rules)
+    triage_level = _apply_risk_factor_escalation(req, merged_symptoms, triage_level, matched)
     distress_override = _has_critical_distress_language(req.chief_complaint_text)
     if distress_override:
         triage_level = "RED"
@@ -211,6 +277,12 @@ def triage(req: IntakeRequest):
     )
 
     return response
+
+
+@router.get("", response_model=list[TriageQueueItem])
+def recent_triage_queue(limit: int = 50):
+    safe_limit = max(1, min(int(limit), 100))
+    return list_recent_triage_logs(safe_limit)
 
 
 @router.get("/{session_id}", response_model=TriageLogResponse)

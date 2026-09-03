@@ -4,7 +4,7 @@ function prettyLabel(key) {
   return key.replaceAll("_", " ");
 }
 
-export default function Result({ intake, triageRes, onRestart }) {
+export default function Result({ intake, triageRes, onRestart, restartLabel = "New Patient" }) {
   const levelKey = (triageRes?.triage_level || "GREEN").toLowerCase();
 
   async function downloadPdf() {
@@ -112,7 +112,7 @@ export default function Result({ intake, triageRes, onRestart }) {
 
         <div className="cta-row" style={{ marginTop: 18 }}>
           <button className="btn-primary" onClick={downloadPdf}>Download Doctor PDF</button>
-          <button className="btn-secondary" onClick={onRestart}>New Patient</button>
+          <button className="btn-secondary" onClick={onRestart}>{restartLabel}</button>
         </div>
       </section>
     </main>
