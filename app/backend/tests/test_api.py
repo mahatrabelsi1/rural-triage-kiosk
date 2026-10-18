@@ -1,5 +1,6 @@
 """End-to-end API tests through FastAPI's TestClient."""
 
+import os
 import unittest
 from unittest.mock import patch
 
@@ -18,6 +19,10 @@ def _raise(*_args, **_kwargs):
 class ApiTestCase(TempDbMixin, unittest.TestCase):
     def setUp(self):
         super().setUp()
+        # Pin the demo accounts so a local .env with real passwords can't break tests.
+        env = patch.dict(os.environ, {"STAFF_ACCOUNTS": "nurse:nurse2026:Nurse,doctor:doctor2026:Doctor"})
+        env.start()
+        self.addCleanup(env.stop)
         self.client = TestClient(app)
 
     def login(self, username="nurse", password="nurse2026"):

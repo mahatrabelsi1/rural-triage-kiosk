@@ -583,3 +583,208 @@ textarea {
   display: grid;
   gap: 12px;
 }
+
+/* ---------- Kiosk entry ---------- */
+
+.emergency-notice {
+  border-left-color: var(--danger);
+  background: #fdf0ee;
+  color: #7c2a22;
+  font-weight: 700;
+}
+
+.entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.entry-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  min-height: 120px;
+  padding: 18px;
+  border-radius: 16px;
+  border: 2px solid var(--line);
+  background: linear-gradient(180deg, #fbfeff 0%, #eef7fb 100%);
+  color: var(--ink);
+}
+
+.entry-card strong {
+  font-size: 1.15rem;
+}
+
+.entry-card span {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.entry-card:hover,
+.entry-card:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 8px 18px rgba(11, 139, 127, 0.18);
+}
+
+.entry-patient {
+  border-color: #8dcfc1;
+}
+
+.staff-entry {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+/* ---------- Symptom severity buttons ---------- */
+
+.category-progress .step-chip {
+  cursor: pointer;
+}
+
+.symptom-name {
+  display: block;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.severity-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.severity-btn {
+  padding: 10px 2px;
+  border-radius: 9px;
+  font-size: 0.8rem;
+  background: #edf5f9;
+  color: #33586a;
+  border: 2px solid transparent;
+}
+
+.severity-btn.selected.sev-0 {
+  background: #dfe9ef;
+  border-color: #8aa9ba;
+  color: #1d3e4e;
+}
+
+.severity-btn.selected.sev-1 {
+  background: #e3f4ec;
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.severity-btn.selected.sev-2 {
+  background: #fff1df;
+  border-color: var(--orange);
+  color: #8f4f08;
+}
+
+.severity-btn.selected.sev-3 {
+  background: #f9e7e5;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.symptom-card.severity-3 {
+  border-color: #e3a9a2;
+}
+
+.btn-large {
+  min-width: 110px;
+  padding: 14px 22px;
+  font-size: 1.05rem;
+}
+
+/* ---------- Patient result ---------- */
+
+.patient-result {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  margin: 6px 0 16px;
+  border-radius: 16px;
+  background: #f3f8fc;
+  border: 1px solid var(--line);
+}
+
+.patient-result h2 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.result-chip {
+  width: fit-content;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 1.3rem;
+  letter-spacing: 1px;
+  color: #fff;
+  background: var(--green);
+}
+
+.level-orange .result-chip {
+  background: var(--orange);
+}
+
+.level-red .result-chip {
+  background: var(--danger);
+}
+
+.level-red .patient-result {
+  background: #fdf0ee;
+  border-color: #e3a9a2;
+}
+
+.level-orange .patient-result {
+  background: #fff6ea;
+  border-color: #f0c58f;
+}
+
+.patient-steps {
+  margin: 0;
+  padding-left: 22px;
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.patient-steps li {
+  margin-bottom: 6px;
+}
+
+.session-code {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.session-code span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.session-code strong {
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 1.5rem;
+  letter-spacing: 2px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px dashed #8aa9ba;
+}
+
+@media (max-width: 760px) {
+  .entry-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .staff-entry {
+    justify-content: space-between;
+  }
+}

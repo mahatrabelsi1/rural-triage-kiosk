@@ -4,17 +4,17 @@ import { postTriage } from "../api/client";
 const SYMPTOM_CATEGORIES = [
   {
     id: "respiratory_flu",
-    label: "Respiratory / Flu-like",
+    label: "Breathing / Flu-like",
     symptoms: ["fever", "cough", "shortness_of_breath", "sore_throat", "chills", "fatigue", "body_aches", "rash"],
   },
   {
     id: "digestive",
-    label: "Digestive / Hydration",
+    label: "Stomach / Hydration",
     symptoms: ["abdominal_pain", "nausea", "vomiting", "diarrhea", "dehydration_signs"],
   },
   {
     id: "neuro_general",
-    label: "Neurologic / General",
+    label: "Head / General",
     symptoms: ["headache", "dizziness", "fainting", "confusion", "severe_weakness", "back_pain"],
   },
   {
@@ -24,14 +24,88 @@ const SYMPTOM_CATEGORIES = [
   },
 ];
 
+// Plain-language names shown to patients; keys must match rules.json.
+const SYMPTOM_LABELS = {
+  fever: "Fever / hot body",
+  cough: "Cough",
+  shortness_of_breath: "Hard to breathe",
+  sore_throat: "Sore throat",
+  chills: "Chills / shivering",
+  fatigue: "Tired / low energy",
+  body_aches: "Body aches",
+  rash: "Skin rash",
+  abdominal_pain: "Stomach pain",
+  nausea: "Feeling sick (nausea)",
+  vomiting: "Vomiting",
+  diarrhea: "Diarrhea",
+  dehydration_signs: "Very thirsty / dry mouth",
+  headache: "Headache",
+  dizziness: "Dizziness",
+  fainting: "Fainting / passing out",
+  confusion: "Confused / not thinking clearly",
+  severe_weakness: "Very weak / cannot stand",
+  back_pain: "Back pain",
+  chest_pain: "Chest pain or tightness",
+  bleeding: "Bleeding",
+  head_injury: "Head injury",
+  urination_pain: "Pain when passing urine",
+  allergic_reaction: "Allergic reaction / swelling",
+  pregnancy_bleeding: "Bleeding during pregnancy",
+};
+
+export const SEVERITY_OPTIONS = [
+  { value: 0, label: "None" },
+  { value: 1, label: "Mild" },
+  { value: 2, label: "Moderate" },
+  { value: 3, label: "Severe" },
+];
+
 const SYMPTOMS = SYMPTOM_CATEGORIES.flatMap((c) => c.symptoms);
 const CHRONIC_OPTIONS = ["diabetes", "hypertension", "heart_problem"];
+const CHRONIC_LABELS = { diabetes: "Diabetes", hypertension: "High blood pressure", heart_problem: "Heart problem" };
 
-function labelize(key) {
-  return key.replaceAll("_", " ");
+// Wording changes with who is holding the kiosk.
+const COPY = {
+  patient: {
+    profileTitle: "About you",
+    name: "Your name",
+    age: "Your age group",
+    sex: "Your sex",
+    pregnant: "Are you pregnant?",
+    illnesses: "Do you have any long-term illness?",
+    complaint: "What is wrong today? Tell us in your own words.",
+    symptomsTitle: "How bad is each problem for you right now?",
+  },
+  companion: {
+    profileTitle: "About the patient",
+    name: "Patient's name",
+    age: "Patient's age group",
+    sex: "Patient's sex",
+    pregnant: "Is the patient pregnant?",
+    illnesses: "Does the patient have any long-term illness?",
+    complaint: "What is wrong with the patient today?",
+    symptomsTitle: "How bad is each problem for the patient right now?",
+  },
+  nurse: {
+    profileTitle: "Patient information",
+    name: "Patient name",
+    age: "Age group",
+    sex: "Sex",
+    pregnant: "Pregnant?",
+    illnesses: "Existing illnesses",
+    complaint: "Chief complaint (free text)",
+    symptomsTitle: "Symptom severity",
+  },
+};
+
+export function symptomLabel(key) {
+  return SYMPTOM_LABELS[key] || key.replaceAll("_", " ");
 }
 
-export default function Intake({ onBack, onDone, onNarration }) {
+export default function Intake({ enteredBy = "patient", onBack, onDone, onNarration }) {
+  const copy = COPY[enteredBy] || COPY.patient;
+  const isNurse = enteredBy === "nurse";
+
   const [formStep, setFormStep] = useState("patient");
   const [categoryIndex, setCategoryIndex] = useState(0);
   const [patientName, setPatientName] = useState("");
@@ -48,22 +122,29 @@ export default function Intake({ onBack, onDone, onNarration }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const canBePregnant = sex !== "male" && ageGroup !== "elderly";
+
   function setSymptom(k, v) {
     setSymptoms(prev => ({ ...prev, [k]: Number(v) }));
+  }
+
+  function changeSex(value) {
+    setSex(value);
+    if (value === "male") setPregnant("");
   }
 
   useEffect(() => {
     if (!onNarration) return;
     if (formStep === "patient") {
-      onNarration("Patient information! Great, let us start with the patient profile and chief complaint.");
+      onNarration(`${copy.profileTitle}. Please fill in the details, and tell us what is wrong today.`);
     }
     if (formStep === "symptoms") {
-      onNarration(`Symptoms rating! Now we are checking ${SYMPTOM_CATEGORIES[categoryIndex].label}. You are doing great!`);
+      onNarration(`${SYMPTOM_CATEGORIES[categoryIndex].label}. ${copy.symptomsTitle} Choose none, mild, moderate, or severe.`);
     }
     if (formStep === "clarify") {
-      onNarration("Clarification questions! Almost done. Please answer these quick safety questions before final triage.");
+      onNarration("Almost done. Please answer these quick safety questions with yes or no.");
     }
-  }, [formStep, categoryIndex, onNarration]);
+  }, [formStep, categoryIndex, onNarration, copy]);
 
   function toggleChronic(k) {
     setChronicIllnesses(prev => ({ ...prev, [k]: !prev[k] }));
@@ -75,22 +156,17 @@ export default function Intake({ onBack, onDone, onNarration }) {
     setFormStep("symptoms");
   }
 
-  function finishCategory() {
-    if (categoryIndex < SYMPTOM_CATEGORIES.length - 1) {
-      setCategoryIndex((v) => v + 1);
-    }
-  }
-
   function buildPayload(overrideSymptoms, clarificationCompleted = false) {
     const selectedChronic = Object.entries(chronicIllnesses)
       .filter(([, checked]) => checked)
       .map(([name]) => name);
 
     return {
+      entered_by: enteredBy,
       patient_name: patientName.trim(),
       age_group: ageGroup || null,
       sex: sex || null,
-      pregnant: pregnant === "" ? null : pregnant === "yes",
+      pregnant: !canBePregnant || pregnant === "" ? null : pregnant === "yes",
       use_nlp_extraction: useNlpExtraction,
       clarification_completed: clarificationCompleted,
       chronic_illnesses: selectedChronic,
@@ -101,6 +177,12 @@ export default function Intake({ onBack, onDone, onNarration }) {
   }
 
   async function submit() {
+    const anyRated = Object.values(symptoms).some((v) => v > 0);
+    if (!chief.trim() && !anyRated) {
+      setError("Please describe the problem in words, or mark at least one symptom.");
+      return;
+    }
+
     setError("");
     setLoading(true);
     try {
@@ -115,7 +197,7 @@ export default function Intake({ onBack, onDone, onNarration }) {
       onDone(payload, res);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Submit failed.";
-      setError(`Submit failed: ${msg}`);
+      setError(`Could not get the result: ${msg} Please ask the nurse for help.`);
     } finally {
       setLoading(false);
     }
@@ -124,7 +206,7 @@ export default function Intake({ onBack, onDone, onNarration }) {
   async function submitClarification() {
     const hasUnanswered = followUps.some((q) => !followAnswers[q.question_id]);
     if (hasUnanswered) {
-      setError("Please answer all clarification questions.");
+      setError("Please answer every question with Yes or No.");
       return;
     }
 
@@ -145,86 +227,93 @@ export default function Intake({ onBack, onDone, onNarration }) {
       onDone(payload, res);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Submit failed.";
-      setError(`Submit failed: ${msg}`);
+      setError(`Could not get the result: ${msg} Please ask the nurse for help.`);
     } finally {
       setLoading(false);
     }
   }
 
+  const lastCategory = categoryIndex === SYMPTOM_CATEGORIES.length - 1;
+
   return (
     <main className="shell">
       <section className="card">
         <div className="steps">
-          <span className={`step-chip ${formStep === "patient" ? "active" : ""}`}>1. Patient Info</span>
+          <span className={`step-chip ${formStep === "patient" ? "active" : ""}`}>1. Details</span>
           <span className={`step-chip ${formStep === "symptoms" ? "active" : ""}`}>2. Symptoms</span>
-          <span className={`step-chip ${formStep === "clarify" ? "active" : ""}`}>3. Clarify</span>
+          <span className={`step-chip ${formStep === "clarify" ? "active" : ""}`}>3. Check</span>
           <span className="step-chip">4. Result</span>
         </div>
 
         {formStep === "patient" && (
           <>
-            <h2 className="section-title">Patient Information</h2>
+            <h2 className="section-title">{copy.profileTitle}</h2>
             <div className="grid-2">
               <div>
-                <label>Patient name</label>
-                <input value={patientName} onChange={(e) => setPatientName(e.target.value)} />
+                <label htmlFor="patient-name">{copy.name}</label>
+                <input id="patient-name" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
               </div>
               <div>
-                <label>Age group</label>
-                <select value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)}>
+                <label htmlFor="age-group">{copy.age}</label>
+                <select id="age-group" value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)}>
                   <option value="">Select</option>
-                  <option value="child">Child</option>
-                  <option value="adult">Adult</option>
-                  <option value="elderly">Elderly</option>
+                  <option value="child">Child (under 16)</option>
+                  <option value="adult">Adult (16 to 64)</option>
+                  <option value="elderly">Older adult (65+)</option>
                 </select>
               </div>
               <div>
-                <label>Sex</label>
-                <select value={sex} onChange={(e) => setSex(e.target.value)}>
+                <label htmlFor="sex">{copy.sex}</label>
+                <select id="sex" value={sex} onChange={(e) => changeSex(e.target.value)}>
                   <option value="">Select</option>
                   <option value="female">Female</option>
                   <option value="male">Male</option>
+                  <option value="other">Other / prefer not to say</option>
                 </select>
               </div>
-              <div>
-                <label>Pregnant?</label>
-                <select value={pregnant} onChange={(e) => setPregnant(e.target.value)}>
-                  <option value="">Unknown / N/A</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </div>
+              {canBePregnant && (
+                <div>
+                  <label htmlFor="pregnant">{copy.pregnant}</label>
+                  <select id="pregnant" value={pregnant} onChange={(e) => setPregnant(e.target.value)}>
+                    <option value="">Not sure / not applicable</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+              )}
             </div>
 
-            <h3 className="section-title" style={{ marginTop: 20 }}>Existing Illnesses</h3>
+            <h3 className="section-title" style={{ marginTop: 20 }}>{copy.illnesses}</h3>
             <div className="check-grid">
               {CHRONIC_OPTIONS.map((k) => (
                 <label key={k} className="check-item">
                   <input type="checkbox" checked={chronicIllnesses[k]} onChange={() => toggleChronic(k)} />
-                  {labelize(k)}
+                  {CHRONIC_LABELS[k]}
                 </label>
               ))}
             </div>
             <div style={{ marginTop: 10 }}>
-              <label>Other chronic illness</label>
-              <input value={chronicOther} onChange={(e) => setChronicOther(e.target.value)} />
+              <label htmlFor="chronic-other">Other illness (optional)</label>
+              <input id="chronic-other" value={chronicOther} onChange={(e) => setChronicOther(e.target.value)} />
             </div>
 
             <div style={{ marginTop: 10 }}>
-              <label>Chief complaint (free text)</label>
-              <textarea value={chief} onChange={(e) => setChief(e.target.value)} rows={3} />
+              <label htmlFor="chief-complaint">{copy.complaint}</label>
+              <textarea id="chief-complaint" value={chief} onChange={(e) => setChief(e.target.value)} rows={3} />
             </div>
 
-            <div style={{ marginTop: 10 }}>
-              <label className="check-item">
-                <input
-                  type="checkbox"
-                  checked={useNlpExtraction}
-                  onChange={() => setUseNlpExtraction((v) => !v)}
-                />
-                Use AI text extraction from chief complaint
-              </label>
-            </div>
+            {isNurse && (
+              <div style={{ marginTop: 10 }}>
+                <label className="check-item">
+                  <input
+                    type="checkbox"
+                    checked={useNlpExtraction}
+                    onChange={() => setUseNlpExtraction((v) => !v)}
+                  />
+                  Use AI text extraction from chief complaint
+                </label>
+              </div>
+            )}
 
             <div className="cta-row" style={{ marginTop: 18 }}>
               <button className="btn-secondary" onClick={onBack}>Back</button>
@@ -235,40 +324,60 @@ export default function Intake({ onBack, onDone, onNarration }) {
 
         {formStep === "symptoms" && (
           <>
-            <h2 className="section-title">Symptoms Rating</h2>
+            <h2 className="section-title">{copy.symptomsTitle}</h2>
             <p className="muted-line">
-              Category {categoryIndex + 1} of {SYMPTOM_CATEGORIES.length}: {SYMPTOM_CATEGORIES[categoryIndex].label}
+              Part {categoryIndex + 1} of {SYMPTOM_CATEGORIES.length}: {SYMPTOM_CATEGORIES[categoryIndex].label}. Leave "None" if it does not apply.
             </p>
             <div className="category-progress">
               {SYMPTOM_CATEGORIES.map((cat, idx) => (
-                <span key={cat.id} className={`step-chip ${idx === categoryIndex ? "active" : ""}`}>
+                <button
+                  key={cat.id}
+                  type="button"
+                  className={`step-chip ${idx === categoryIndex ? "active" : ""}`}
+                  onClick={() => setCategoryIndex(idx)}
+                >
                   {idx + 1}. {cat.label}
-                </span>
+                </button>
               ))}
             </div>
             <div className="symptom-grid-3">
-              {SYMPTOM_CATEGORIES[categoryIndex].symptoms.map((k) => (
-                <div key={k} className="symptom-card">
-                  <label>{labelize(k)}</label>
-                  <select value={symptoms[k]} onChange={(e) => setSymptom(k, e.target.value)}>
-                    <option value={0}>0</option>
-                    <option value={1}>1</option>
-                    <option value={2}>2</option>
-                    <option value={3}>3</option>
-                  </select>
-                </div>
-              ))}
+              {SYMPTOM_CATEGORIES[categoryIndex].symptoms
+                .filter((k) => k !== "pregnancy_bleeding" || canBePregnant)
+                .map((k) => (
+                  <div key={k} className={`symptom-card severity-${symptoms[k]}`}>
+                    <span className="symptom-name" id={`label-${k}`}>{symptomLabel(k)}</span>
+                    <div className="severity-row" role="radiogroup" aria-labelledby={`label-${k}`}>
+                      {SEVERITY_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={symptoms[k] === opt.value}
+                          className={`severity-btn sev-${opt.value} ${symptoms[k] === opt.value ? "selected" : ""}`}
+                          onClick={() => setSymptom(k, opt.value)}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
             </div>
 
-            {error && <p className="error-text">{error}</p>}
+            {error && <p className="error-text" role="alert">{error}</p>}
 
             <div className="cta-row" style={{ marginTop: 18 }}>
-              <button className="btn-secondary" onClick={() => setFormStep("patient")}>Back To Patient Info</button>
-              {categoryIndex < SYMPTOM_CATEGORIES.length - 1 ? (
-                <button className="btn-primary" onClick={finishCategory}>Finish Category</button>
+              <button
+                className="btn-secondary"
+                onClick={() => (categoryIndex === 0 ? setFormStep("patient") : setCategoryIndex((v) => v - 1))}
+              >
+                Back
+              </button>
+              {!lastCategory ? (
+                <button className="btn-primary" onClick={() => setCategoryIndex((v) => v + 1)}>Next</button>
               ) : (
                 <button className="btn-primary" onClick={submit} disabled={loading}>
-                  {loading ? "Processing..." : "Get Triage Result"}
+                  {loading ? "Processing..." : "Get Result"}
                 </button>
               )}
             </div>
@@ -277,9 +386,9 @@ export default function Intake({ onBack, onDone, onNarration }) {
 
         {formStep === "clarify" && (
           <>
-            <h2 className="section-title">Clarification Questions</h2>
+            <h2 className="section-title">A few safety questions</h2>
             <p className="muted-line">
-              Please answer these quick safety questions before final triage.
+              Please answer these quick questions before we show the result.
             </p>
 
             <div className="clarify-list">
@@ -289,14 +398,14 @@ export default function Intake({ onBack, onDone, onNarration }) {
                   <div className="cta-row">
                     <button
                       type="button"
-                      className={`btn-secondary ${followAnswers[q.question_id] === "yes" ? "btn-choice-active" : ""}`}
+                      className={`btn-secondary btn-large ${followAnswers[q.question_id] === "yes" ? "btn-choice-active" : ""}`}
                       onClick={() => setFollowAnswers((prev) => ({ ...prev, [q.question_id]: "yes" }))}
                     >
                       Yes
                     </button>
                     <button
                       type="button"
-                      className={`btn-secondary ${followAnswers[q.question_id] === "no" ? "btn-choice-active" : ""}`}
+                      className={`btn-secondary btn-large ${followAnswers[q.question_id] === "no" ? "btn-choice-active" : ""}`}
                       onClick={() => setFollowAnswers((prev) => ({ ...prev, [q.question_id]: "no" }))}
                     >
                       No
@@ -306,12 +415,12 @@ export default function Intake({ onBack, onDone, onNarration }) {
               ))}
             </div>
 
-            {error && <p className="error-text">{error}</p>}
+            {error && <p className="error-text" role="alert">{error}</p>}
 
             <div className="cta-row" style={{ marginTop: 18 }}>
               <button className="btn-secondary" onClick={() => setFormStep("symptoms")}>Back To Symptoms</button>
               <button className="btn-primary" onClick={submitClarification} disabled={loading}>
-                {loading ? "Rechecking..." : "Finish Triage"}
+                {loading ? "Rechecking..." : "Finish"}
               </button>
             </div>
           </>

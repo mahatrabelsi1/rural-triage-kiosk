@@ -1,4 +1,4 @@
-﻿from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple
 from .schemas import MatchedRule
 
 def _eval_condition(symptoms: Dict[str, int], cond: dict) -> bool:

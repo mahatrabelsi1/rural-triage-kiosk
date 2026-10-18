@@ -1,11 +1,11 @@
-import json
 from pathlib import Path
 from typing import Dict, List
 
+from src.triage.rules_loader import load_json_cached
+
 
 def load_catalog(path: Path) -> dict:
-    with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+    return load_json_cached(path)
 
 
 def _append_unique(blocks: List[str], text: str) -> None:
