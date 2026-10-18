@@ -38,10 +38,10 @@ class TestNlpExtractor(unittest.TestCase):
         self.assertEqual(extracted.get("chest_pain"), 1)
 
     def test_merge_keeps_higher_manual_score(self):
-        manual = {"fever": 4, "cough": 0}
+        manual = {"fever": 3, "cough": 0}
         extracted = {"fever": 1, "cough": 1}
         merged = merge_manual_and_extracted_symptoms(manual, extracted)
-        self.assertEqual(merged["fever"], 4)
+        self.assertEqual(merged["fever"], 3)
         self.assertEqual(merged["cough"], 1)
 
     def test_extraction_details_include_confidence_and_phrase(self):

@@ -144,7 +144,7 @@ def generate_doctor_pdf(
     # Selected symptoms
     y -= 8
     y = _ensure_space(c, y, 170, page_width, page_height)
-    y = _draw_section_title(c, "Selected Symptoms (1-5)", y)
+    y = _draw_section_title(c, "Selected Symptoms (0-3 scale)", y)
     c.setFont("Helvetica", 10)
     c.setFillColor(colors.HexColor("#13313D"))
     if selected_symptoms:

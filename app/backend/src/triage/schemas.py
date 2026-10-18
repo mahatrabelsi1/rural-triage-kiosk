@@ -1,18 +1,25 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
 TriageLevel = Literal["RED", "ORANGE", "GREEN"]
 
+# 0 = none, 1 = mild, 2 = moderate, 3 = severe. Must match rules.json "rating_scale".
+SymptomRating = Annotated[int, Field(ge=0, le=3)]
+
+# Kiosk intake is filled by the patient, an accompanying person, or a nurse as a fallback.
+EnteredBy = Literal["patient", "companion", "nurse"]
+
 
 class IntakeRequest(BaseModel):
     patient_name: str = Field(default="", max_length=200)
     chief_complaint_text: str = Field(default="", max_length=2000)
-    symptoms: Dict[str, int]  # 0..5 for each symptom key
+    symptoms: Dict[str, SymptomRating]
     use_nlp_extraction: bool = True
     clarification_completed: bool = False
-    age_group: Optional[str] = None
-    sex: Optional[str] = None
+    entered_by: Optional[EnteredBy] = None
+    age_group: Optional[Literal["child", "adult", "elderly"]] = None
+    sex: Optional[Literal["female", "male", "other"]] = None
     pregnant: Optional[bool] = None
     chronic_illnesses: List[str] = Field(default_factory=list)
     chronic_illnesses_other: str = Field(default="", max_length=500)
@@ -75,4 +82,21 @@ class TriageQueueItem(BaseModel):
     patient_name: str = ""
     age_group: Optional[str] = None
     sex: Optional[str] = None
+    entered_by: Optional[str] = None
     chief_complaint_text: str = ""
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class LoginResponse(BaseModel):
+    token: str
+    username: str
+    display_name: str
+    expires_at: int
+
+
+class TranscriptionResponse(BaseModel):
+    text: str

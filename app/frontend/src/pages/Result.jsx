@@ -14,9 +14,9 @@ export default function Result({ intake, triageRes, onRestart, restartLabel = "N
       patient_name: intake.patient_name,
       chief_complaint_text: intake.chief_complaint_text,
       matched_reasons: triageRes.matched_rules.map((r) => `${r.id}: ${r.reason}`),
-      selected_symptoms: triageRes.selected_symptoms.map((s) => `${prettyLabel(s.symptom)} = ${s.rating}/5`),
+      selected_symptoms: triageRes.selected_symptoms.map((s) => `${prettyLabel(s.symptom)} = ${s.rating}/3`),
       extracted_symptoms: (triageRes.extracted_symptoms || []).map((s) =>
-        `${prettyLabel(s.symptom)} = ${s.rating}/5 (${Math.round((s.confidence || 0) * 100)}% confidence, phrase: "${s.source_phrase || "n/a"}")`
+        `${prettyLabel(s.symptom)} = ${s.rating}/3 (${Math.round((s.confidence || 0) * 100)}% confidence, phrase: "${s.source_phrase || "n/a"}")`
       ),
       extracted_entities: (triageRes.extracted_entities || []).map((entity) =>
         `${entity.text} (${entity.label}, ${Math.round((entity.score || 0) * 100)}% confidence)`
@@ -72,10 +72,10 @@ export default function Result({ intake, triageRes, onRestart, restartLabel = "N
         <h3 className="section-title">Chief Complaint</h3>
         <p className="muted-line">{intake.chief_complaint_text || "N/A"}</p>
 
-        <h3 className="section-title">Selected Symptoms (1-5)</h3>
+        <h3 className="section-title">Selected Symptoms (0-3)</h3>
         <ul className="list">
           {triageRes.selected_symptoms.length ? triageRes.selected_symptoms.map((s) => (
-            <li key={s.symptom}>{prettyLabel(s.symptom)}: {s.rating}/5</li>
+            <li key={s.symptom}>{prettyLabel(s.symptom)}: {s.rating}/3</li>
           )) : <li>None selected</li>}
         </ul>
 
@@ -83,7 +83,7 @@ export default function Result({ intake, triageRes, onRestart, restartLabel = "N
         <ul className="list">
           {triageRes.extracted_symptoms?.length ? triageRes.extracted_symptoms.map((s) => (
             <li key={s.symptom}>
-              {prettyLabel(s.symptom)}: {s.rating}/5
+              {prettyLabel(s.symptom)}: {s.rating}/3
               {" "}({Math.round((s.confidence || 0) * 100)}% confidence, phrase: "{s.source_phrase || "n/a"}")
             </li>
           )) : <li>No additional symptoms extracted</li>}

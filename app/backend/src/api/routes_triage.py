@@ -10,6 +10,7 @@ from src.nlp.hf_extractor import process_complaint_text
 from src.storage.db import get_latest_triage_log, insert_triage_log, list_recent_triage_logs
 from src.triage.engine import run_triage
 from src.triage.rules_loader import load_rules
+from src.triage.safety import detect_critical_language
 from src.triage.schemas import (
     ExtractedEntity,
     ExtractedSymptom,
@@ -26,12 +27,6 @@ router = APIRouter()
 
 RULES_PATH = Path(__file__).resolve().parents[4] / "rules-and-data" / "rules.json"
 ADVICE_CATALOG_PATH = Path(__file__).resolve().parents[1] / "advice" / "advice_catalog.json"
-CRITICAL_DISTRESS_PATTERNS = [
-    re.compile(r"\bi\s*(am|m)?\s*(gonna|ganna|gunna|going to)\s*die\b"),
-    re.compile(r"\bi\s*am\s*dying\b"),
-    re.compile(r"\bi\s*will\s*die\b"),
-]
-
 FOLLOW_UP_TEMPLATES = [
     {
         "question_id": "FQ1",
@@ -95,13 +90,6 @@ def _extracted_entities(items: list[dict]) -> list[ExtractedEntity]:
     ]
 
 
-def _has_critical_distress_language(text: str) -> bool:
-    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
-    if not normalized:
-        return False
-    return any(pattern.search(normalized) for pattern in CRITICAL_DISTRESS_PATTERNS)
-
-
 def _highest_level(current: str, candidate: str) -> str:
     rank = {"GREEN": 0, "ORANGE": 1, "RED": 2}
     return candidate if rank[candidate] > rank[current] else current
@@ -121,9 +109,20 @@ def _apply_risk_factor_escalation(
     has_diabetes = _has_chronic(req, "diabetes")
     has_heart_problem = _has_chronic(req, "heart")
 
-    if pregnant and int(symptoms.get("pregnancy_bleeding", 0)) >= 1:
-        level = _highest_level(level, "RED")
-        matched.append(MatchedRule(id="RF1", reason="Pregnancy with bleeding reported."))
+    if pregnant:
+        # Any bleeding in pregnancy is treated as an emergency, not only the
+        # dedicated "pregnancy_bleeding" symptom.
+        if max(int(symptoms.get("pregnancy_bleeding", 0)), int(symptoms.get("bleeding", 0))) >= 1:
+            level = _highest_level(level, "RED")
+            matched.append(MatchedRule(id="RF1", reason="Pregnancy with bleeding reported."))
+
+        abdominal = int(symptoms.get("abdominal_pain", 0))
+        if abdominal >= 2:
+            level = _highest_level(level, "RED")
+            matched.append(MatchedRule(id="RF8", reason="Pregnancy with moderate or severe abdominal pain."))
+        elif abdominal >= 1:
+            level = _highest_level(level, "ORANGE")
+            matched.append(MatchedRule(id="RF9", reason="Pregnancy with abdominal pain reported."))
 
     if age_group == "elderly":
         elderly_risk_symptoms = [
@@ -209,7 +208,10 @@ def triage(req: IntakeRequest):
     session_id = uuid.uuid4().hex[:12]
 
     rules = load_rules(RULES_PATH)
-    allowed_symptoms = rules.get("symptoms", req.symptoms.keys())
+    allowed_symptoms = rules.get("symptoms", list(req.symptoms.keys()))
+    unknown = sorted(set(req.symptoms) - set(allowed_symptoms))
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Unknown symptom keys: {', '.join(unknown)}")
     hf_result = process_complaint_text(req.chief_complaint_text) if req.use_nlp_extraction else {
         "entities": [],
         "symptom_scores": {},
@@ -232,15 +234,11 @@ def triage(req: IntakeRequest):
 
     triage_level, matched = run_triage(merged_symptoms, rules)
     triage_level = _apply_risk_factor_escalation(req, merged_symptoms, triage_level, matched)
-    distress_override = _has_critical_distress_language(req.chief_complaint_text)
+    critical_hits = detect_critical_language(req.chief_complaint_text)
+    distress_override = bool(critical_hits)
     if distress_override:
         triage_level = "RED"
-        matched.append(
-            MatchedRule(
-                id="S1",
-                reason="Critical distress language detected in chief complaint.",
-            )
-        )
+        matched.extend(critical_hits)
 
     follow_up_questions = _build_follow_up_questions(req, extracted_details, triage_level)
     selected = _selected_symptoms(merged_symptoms)
@@ -253,6 +251,7 @@ def triage(req: IntakeRequest):
         catalog=advice_catalog,
         needs_clarification=bool(follow_up_questions),
         distress_override=distress_override,
+        self_harm_risk=any(hit.id == "S2" for hit in critical_hits),
     )
 
     response = TriageResponse(

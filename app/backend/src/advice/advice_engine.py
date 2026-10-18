@@ -36,6 +36,7 @@ def build_advice_blocks(
     catalog: dict,
     needs_clarification: bool = False,
     distress_override: bool = False,
+    self_harm_risk: bool = False,
 ) -> List[str]:
     blocks: List[str] = []
 
@@ -51,6 +52,9 @@ def build_advice_blocks(
 
     if distress_override:
         _append_unique(blocks, "Critical distress language was detected in the complaint text, so escalation should not wait for more symptom detail.")
+
+    if self_harm_risk:
+        _append_unique(blocks, "Possible self-harm risk: do not leave the patient alone, remove objects that could cause harm, and involve a clinician immediately.")
 
     if matched_reasons:
         joined = "; ".join(matched_reasons[:3])
