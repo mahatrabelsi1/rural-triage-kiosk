@@ -48,8 +48,10 @@ def staff_accounts() -> dict[str, dict[str, str]]:
 
 ENABLE_HF_NER = env_flag("ENABLE_HF_NER", True)
 HF_NER_MODEL_NAME = os.getenv("HF_NER_MODEL_NAME", "d4data/biomedical-ner-all")
-TTS_MODEL_NAME = os.getenv("TTS_MODEL_NAME", "Vedika35/Vedika_text_to_speech")
+TTS_MODEL_NAME = os.getenv("TTS_MODEL_NAME", "facebook/mms-tts-eng")
 STT_MODEL_NAME = os.getenv("STT_MODEL_NAME", "openai/whisper-tiny")
+# Empty = auto-detect language (e.g. Arabic, French, English). Set e.g. "en" to force one.
+STT_LANGUAGE = os.getenv("STT_LANGUAGE", "").strip()
 AUTH_SECRET = os.getenv("AUTH_SECRET", "")
 TOKEN_TTL_MINUTES = int(os.getenv("TOKEN_TTL_MINUTES", "480"))
 CORS_ORIGINS = [

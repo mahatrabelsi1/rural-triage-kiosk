@@ -53,10 +53,16 @@ export default function App() {
   const [intake, setIntake] = useState(null);
   const [triageRes, setTriageRes] = useState(null);
   const [resultFromQueue, setResultFromQueue] = useState(false);
-  const [speechText, setSpeechText] = useState(WELCOME_LINE);
+  // Each narration gets a new id so the same text can be spoken again on request.
+  const [speech, setSpeech] = useState({ text: WELCOME_LINE, id: 0 });
+  const speechIdRef = useRef(0);
+  const setSpeechText = useCallback((text) => {
+    speechIdRef.current += 1;
+    setSpeech({ text, id: speechIdRef.current });
+  }, []);
   const [staff, setStaff] = useState(() => loadStaffSession());
 
-  const narrate = useCallback((text) => setSpeechText(text), []);
+  const narrate = setSpeechText;
 
   function updateStaff(session) {
     saveStaffSession(session);
@@ -180,7 +186,7 @@ export default function App() {
     <div className="split-layout">
       <div className="split-triage">{page}</div>
       <aside className="split-video">
-        <AvatarAssistant speechText={speechText} />
+        <AvatarAssistant speech={speech} />
       </aside>
     </div>
   );

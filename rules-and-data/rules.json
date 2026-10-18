@@ -151,6 +151,15 @@
         {"symptom":"dizziness","op":">=","value":3}
       ],
       "reason": "Severe symptom reported; same-day review even if not high-risk on its own."
+    },
+    {
+      "id": "O8",
+      "logic": "ANY",
+      "conditions": [
+        {"symptom":"chest_pain","op":">=","value":1},
+        {"symptom":"shortness_of_breath","op":">=","value":1}
+      ],
+      "reason": "Any chest pain or breathing difficulty needs same-day review."
     }
   ]
 }

@@ -131,6 +131,13 @@ class TestRatingScale(TempDbMixin, unittest.TestCase):
             ]
             self.assertEqual(levels, sorted(levels), symptom)
 
+    def test_mild_chest_pain_or_breathlessness_is_never_green(self):
+        for symptom in ("chest_pain", "shortness_of_breath"):
+            res = triage(symptoms={symptom: 1}, use_nlp_extraction=False)
+            self.assertEqual(res.triage_level, "ORANGE", symptom)
+            self.assertIn("O8", [m.id for m in res.matched_rules])
+        self.assertEqual(triage("no fever, chest pain since morning").triage_level, "ORANGE")
+
     def test_back_pain_severe_is_orange(self):
         self.assertEqual(triage(symptoms={"back_pain": 3}, use_nlp_extraction=False).triage_level, "ORANGE")
 

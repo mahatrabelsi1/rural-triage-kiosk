@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { postTriage } from "../api/client";
+import MicButton from "../components/MicButton";
 
 const SYMPTOM_CATEGORIES = [
   {
@@ -142,9 +143,9 @@ export default function Intake({ enteredBy = "patient", onBack, onDone, onNarrat
       onNarration(`${SYMPTOM_CATEGORIES[categoryIndex].label}. ${copy.symptomsTitle} Choose none, mild, moderate, or severe.`);
     }
     if (formStep === "clarify") {
-      onNarration("Almost done. Please answer these quick safety questions with yes or no.");
+      onNarration(`Almost done. Please answer yes or no. ${followUps.map((q) => q.question_text).join(" ")}`);
     }
-  }, [formStep, categoryIndex, onNarration, copy]);
+  }, [formStep, categoryIndex, onNarration, copy, followUps]);
 
   function toggleChronic(k) {
     setChronicIllnesses(prev => ({ ...prev, [k]: !prev[k] }));
@@ -252,6 +253,7 @@ export default function Intake({ enteredBy = "patient", onBack, onDone, onNarrat
               <div>
                 <label htmlFor="patient-name">{copy.name}</label>
                 <input id="patient-name" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
+                <MicButton label="Say name" onText={(t) => setPatientName(t.replace(/[.!?]+$/, ""))} />
               </div>
               <div>
                 <label htmlFor="age-group">{copy.age}</label>
@@ -295,11 +297,13 @@ export default function Intake({ enteredBy = "patient", onBack, onDone, onNarrat
             <div style={{ marginTop: 10 }}>
               <label htmlFor="chronic-other">Other illness (optional)</label>
               <input id="chronic-other" value={chronicOther} onChange={(e) => setChronicOther(e.target.value)} />
+              <MicButton label="Say it" onText={(t) => setChronicOther(t.replace(/[.!?]+$/, ""))} />
             </div>
 
             <div style={{ marginTop: 10 }}>
               <label htmlFor="chief-complaint">{copy.complaint}</label>
               <textarea id="chief-complaint" value={chief} onChange={(e) => setChief(e.target.value)} rows={3} />
+              <MicButton label="Speak instead of typing" onText={(t) => setChief((prev) => (prev.trim() ? `${prev.trim()} ${t}` : t))} />
             </div>
 
             {isNurse && (

@@ -204,7 +204,7 @@ button:disabled {
 
 .symptom-grid-3 {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
   gap: 10px;
 }
 
@@ -787,4 +787,189 @@ textarea {
   .staff-entry {
     justify-content: space-between;
   }
+}
+
+/* ---------- Virtual nurse avatar ---------- */
+
+.avatar-stage {
+  background: #dcecf4;
+  display: flex;
+  justify-content: center;
+}
+
+.nurse-avatar {
+  width: 100%;
+  max-height: 52vh;
+  display: block;
+}
+
+/* Blink every few seconds; transform-only so it stays cheap on low-end GPUs. */
+.nurse-avatar .eyes {
+  transform-origin: 100px 110px;
+  animation: nurse-blink 4.8s infinite;
+}
+
+@keyframes nurse-blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.1); }
+}
+
+.nurse-avatar.is-speaking .brow {
+  animation: nurse-brow 1.6s ease-in-out infinite;
+}
+
+@keyframes nurse-brow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+
+.nurse-avatar .listen-waves {
+  transition: opacity 0.2s ease;
+}
+
+.nurse-avatar.is-listening .listen-waves {
+  animation: nurse-listen 1s ease-in-out infinite;
+}
+
+@keyframes nurse-listen {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nurse-avatar .eyes,
+  .nurse-avatar.is-speaking .brow,
+  .nurse-avatar.is-listening .listen-waves {
+    animation: none;
+  }
+}
+
+.avatar-captions {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #17384a;
+  background: #ffffff;
+  border-top: 1px solid #cbe0ea;
+  max-height: 9.5em;
+  overflow-y: auto;
+}
+
+.caption-word.current {
+  background: #ffe9a8;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px #ffe9a8;
+}
+
+.avatar-note {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  color: #7a4b07;
+  background: #fff6e5;
+  border-top: 1px solid #f0d9a8;
+}
+
+.avatar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #edf5f9;
+  border-top: 1px solid #cbe0ea;
+}
+
+.voice-button {
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-size: 0.8rem;
+  color: #fff;
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.voice-button.off {
+  background: #6b8796;
+}
+
+.avatar-settings {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid #cbe0ea;
+  background: #f8fcff;
+}
+
+.avatar-settings label {
+  margin: 0;
+  font-size: 0.82rem;
+  display: grid;
+  gap: 4px;
+}
+
+.avatar-settings .check-item {
+  display: flex;
+}
+
+/* ---------- Microphone (speech-to-text) ---------- */
+
+.mic-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.mic-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #e8f1fb;
+  color: #1a4f86;
+  border: 1px solid #b9d3ee;
+  font-size: 0.85rem;
+}
+
+.mic-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #1f6fc2;
+}
+
+.mic-button.active {
+  background: #fdeceb;
+  color: var(--danger);
+  border-color: #eab3ad;
+}
+
+.mic-button.active .mic-dot {
+  background: var(--danger);
+  animation: nurse-listen 1s ease-in-out infinite;
+}
+
+.mic-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.mic-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* Center the avatar panel without clipping its top when settings make it taller than the screen. */
+.split-video {
+  align-items: flex-start;
+  overflow-y: auto;
+}
+
+.split-video .avatar-assistant {
+  margin: auto 0;
 }

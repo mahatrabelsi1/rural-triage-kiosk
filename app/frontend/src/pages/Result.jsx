@@ -30,6 +30,9 @@ const PATIENT_MESSAGES = {
   },
 };
 
+// Rule IDs and NLP notes are for clinicians; patients see only the plain advice.
+const STAFF_ONLY_ADVICE = ["Escalation context:", "Clarification questions are still recommended"];
+
 function severityWord(rating) {
   return SEVERITY_OPTIONS.find((o) => o.value === Number(rating))?.label || String(rating);
 }
@@ -40,6 +43,7 @@ export default function Result({ intake, triageRes, isStaff, onRestart, onAuthEx
   const [pdfError, setPdfError] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
   const message = PATIENT_MESSAGES[level];
+  const patientAdvice = triageRes.advice_blocks.filter((a) => !STAFF_ONLY_ADVICE.some((p) => a.startsWith(p)));
 
   async function savePdf() {
     setPdfError("");
@@ -70,7 +74,7 @@ export default function Result({ intake, triageRes, isStaff, onRestart, onAuthEx
   ];
 
   function readAdvice() {
-    onReadAloud?.([message.title, ...message.steps, ...triageRes.advice_blocks].join(" "));
+    onReadAloud?.([message.title, ...message.steps, ...patientAdvice].join(" "));
   }
 
   if (!isStaff) {
@@ -91,7 +95,7 @@ export default function Result({ intake, triageRes, isStaff, onRestart, onAuthEx
 
           <h3 className="section-title">Advice</h3>
           <ul className="list">
-            {triageRes.advice_blocks.map((a, i) => <li key={i}>{a}</li>)}
+            {patientAdvice.map((a, i) => <li key={i}>{a}</li>)}
           </ul>
 
           <p className="notice">This result helps the clinic decide who to see first. It is not a diagnosis.</p>
