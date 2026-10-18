@@ -98,9 +98,9 @@ Run from `app/backend`: `python -m unittest discover tests`
 | `test_nlp_extractor.py` | 5 | 5 pass | 5 pass |
 | `test_hf_extractor.py` | 2 | 2 pass | 2 pass |
 | `test_safety_regressions.py` (new) | 24 | — | 24 pass |
-| `test_api.py` (new) | 13 | — | 13 pass |
+| `test_api.py` (new) | 15 | — | 15 pass |
 | `test_speech.py` (new) | 9 | — | 9 pass |
-| **Total** | **66** | **20 pass** | **66 pass** |
+| **Total** | **68** | **20 pass** | **68 pass** |
 
 Other test-health results:
 
@@ -154,6 +154,15 @@ Automated in `test_api.py`; also checked by hand with `curl` against a running s
 | Automatic, user waits (no Stop press) | Edge recognizer returned an empty final result; field stayed empty with **no message** | Auto-stop after the pause; name field = `Amina Bansala` ("My name is" trimmed) |
 | Kiosk server, Stop pressed after 2.5 s | Worked | Works: `Amina Benson` (cut mid-name by the early Stop, as expected) |
 | Browser recognition only | Empty field, no message | Empty field, but the message "We did not catch any words. Please press the microphone and speak again..." is shown |
+
+**Follow-up 2: "The kiosk server did not respond" (reported 2026-10-18).** Root cause: a leftover dev server held port 5173, so Vite started the kiosk on **5174**. The backend only allowed origin 5173, so the browser's CORS preflight got `400 Bad Request` and every request from the page was blocked.
+
+| Check | Before fix | After fix |
+|---|---|---|
+| Preflight `OPTIONS /speech/transcribe` from `http://localhost:5174` | 400 | 200 |
+| Preflight from `localhost:5173`, `127.0.0.1:5175`, `[::1]:5173` | 400 except 5173 | 200 (automated test) |
+| Preflight from `http://evil.example.com`, `http://localhost.evil.com:5173` | 400 | 400 (still rejected) |
+| Name dictation on the kiosk at `localhost:5174` | "The kiosk server did not respond..." | `Amina Bansala` |
 
 ---
 

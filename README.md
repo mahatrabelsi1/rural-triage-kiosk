@@ -47,7 +47,7 @@ AUTH_SECRET=<output of: python -c "import secrets; print(secrets.token_urlsafe(3
 
 ## Demonstrated Safety Performance
 
-**66 automated tests, all passing** (`python -m unittest discover tests` from `app/backend`). Every case tried during the latest review, with before and after results, is listed in **[TEST_CASES.md](TEST_CASES.md)**.
+**68 automated tests, all passing** (`python -m unittest discover tests` from `app/backend`). Every case tried during the latest review, with before and after results, is listed in **[TEST_CASES.md](TEST_CASES.md)**.
 
 Critical cases that used to be triaged **GREEN** and are now caught:
 
@@ -65,7 +65,7 @@ Critical cases that used to be triaged **GREEN** and are now caught:
 |---|---|---|
 | `test_triage_safety.py` | 8 | Original escalation scenarios (distress, diabetes, pregnancy, elderly, cardiac, clarification) |
 | `test_safety_regressions.py` | 24 | Every gap found in review: critical language, negation scope, severity words, 0–3 scale sweeps, pregnancy |
-| `test_api.py` | 13 | Login, protected endpoints, PDF from stored session, path traversal, offline model fallback |
+| `test_api.py` | 15 | Login, protected endpoints, CORS, PDF from stored session, path traversal, offline model fallback |
 | `test_speech.py` | 9 | Speech-to-text decoding, resampling, silence and hallucination guards, error codes |
 | `test_nlp_extractor.py` | 5 | Extraction, negation, synonyms, merge, confidence |
 | `test_triage_logging.py` | 3 | Session logging, 404, urgency-sorted queue |
@@ -157,7 +157,7 @@ rural-triage-kiosk/
 │   │   │   ├── auth.py       # Staff login tokens
 │   │   │   ├── config.py     # Settings from environment / .env
 │   │   │   └── main.py
-│   │   ├── tests/            # 66 tests (see table above)
+│   │   ├── tests/            # 68 tests (see table above)
 │   │   ├── .env.example
 │   │   └── requirements.txt
 │   └── frontend/
@@ -228,7 +228,8 @@ To prepare a kiosk that will be offline, run each feature once while connected. 
 | `STAFF_ACCOUNTS` | demo `nurse` / `doctor` accounts | `user:password[:Display name]`, comma separated |
 | `AUTH_SECRET` | random per start | Signs login tokens |
 | `TOKEN_TTL_MINUTES` | `480` | Staff login lifetime |
-| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Frontend addresses allowed to call the API |
+| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Extra frontend addresses allowed to call the API (e.g. a kiosk on another machine) |
+| `CORS_ALLOW_LOCALHOST` | `true` | Allow the kiosk on this machine at any port. Vite switches to 5174+ when 5173 is busy, which used to block every request |
 | `ENABLE_HF_NER` | `true` | Turn the biomedical NER layer off entirely |
 | `HF_NER_MODEL_NAME` | `d4data/biomedical-ner-all` | NER model |
 | `TTS_MODEL_NAME` | `facebook/mms-tts-eng` | AI voice (`facebook/mms-tts-fra`, `facebook/mms-tts-ara` for French/Arabic) |

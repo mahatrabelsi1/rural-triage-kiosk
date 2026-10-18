@@ -85,6 +85,25 @@ class TestProtectedEndpoints(ApiTestCase):
         self.assertEqual(self.submit(symptoms={"made_up": 1}).status_code, 422)
 
 
+class TestCors(ApiTestCase):
+    def preflight(self, origin):
+        return self.client.options(
+            "/speech/transcribe",
+            headers={"Origin": origin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type"},
+        )
+
+    def test_local_frontend_on_any_port_is_allowed(self):
+        # Vite moves to 5174 when 5173 is busy; that used to fail with 400.
+        for origin in ["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5175", "http://[::1]:5173"]:
+            res = self.preflight(origin)
+            self.assertEqual(res.status_code, 200, origin)
+            self.assertEqual(res.headers["access-control-allow-origin"], origin)
+
+    def test_other_sites_are_rejected(self):
+        for origin in ["http://evil.example.com", "http://localhost.evil.com:5173"]:
+            self.assertEqual(self.preflight(origin).status_code, 400, origin)
+
+
 class TestPdf(ApiTestCase):
     def test_pdf_built_from_stored_session(self):
         session_id = self.submit(patient_name="Amina").json()["session_id"]

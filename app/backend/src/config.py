@@ -59,3 +59,7 @@ CORS_ORIGINS = [
     for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
     if origin.strip()
 ]
+# The kiosk frontend on this same machine is always allowed, on any port: Vite
+# moves to 5174, 5175... when 5173 is taken, which used to break every request.
+CORS_ALLOW_LOCALHOST = env_flag("CORS_ALLOW_LOCALHOST", True)
+LOCALHOST_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$"

@@ -23,6 +23,7 @@ app = FastAPI(title="Rural Triage Kiosk", version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
+    allow_origin_regex=config.LOCALHOST_ORIGIN_REGEX if config.CORS_ALLOW_LOCALHOST else None,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
