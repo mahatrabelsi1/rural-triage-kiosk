@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from typing import Any
+
+from src import config
 
 try:
     from transformers import pipeline
 except Exception:  # pragma: no cover - handled at runtime when dependency is absent
     pipeline = None
 
+logger = logging.getLogger(__name__)
 
-HF_MODEL_NAME = "d4data/biomedical-ner-all"
+HF_MODEL_NAME = config.HF_NER_MODEL_NAME
 
 SYMPTOM_MAP = {
     "fever": "fever",
@@ -26,14 +30,20 @@ SYMPTOM_MAP = {
 
 @lru_cache(maxsize=1)
 def get_ner_pipeline():
-    if pipeline is None:
+    """Load the NER model once. Any failure (no internet on first run, missing
+    torch, corrupt cache) disables this layer instead of failing triage."""
+    if pipeline is None or not config.ENABLE_HF_NER:
         return None
 
-    return pipeline(
-        "token-classification",
-        model=HF_MODEL_NAME,
-        aggregation_strategy="simple",
-    )
+    try:
+        return pipeline(
+            "token-classification",
+            model=HF_MODEL_NAME,
+            aggregation_strategy="simple",
+        )
+    except Exception:
+        logger.warning("Biomedical NER model %s unavailable; using local extractor only.", HF_MODEL_NAME, exc_info=True)
+        return None
 
 
 def extract_entities(text: str) -> list[dict[str, Any]]:
@@ -45,7 +55,11 @@ def extract_entities(text: str) -> list[dict[str, Any]]:
     if ner_pipeline is None:
         return []
 
-    results = ner_pipeline(cleaned)
+    try:
+        results = ner_pipeline(cleaned)
+    except Exception:
+        logger.warning("Biomedical NER inference failed; continuing without entities.", exc_info=True)
+        return []
     entities: list[dict[str, Any]] = []
     for item in results:
         entity_text = str(item.get("word", "")).strip()

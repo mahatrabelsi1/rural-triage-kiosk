@@ -18,7 +18,7 @@ function shortComplaint(text) {
   return text.length > 110 ? `${text.slice(0, 110)}...` : text;
 }
 
-export default function Queue({ onBack, onOpenSummary }) {
+export default function Queue({ staff, onBack, onLogout, onAuthExpired, onOpenSummary }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -29,6 +29,7 @@ export default function Queue({ onBack, onOpenSummary }) {
     try {
       setItems(await getTriageQueue());
     } catch (e) {
+      if (e?.status === 401) return onAuthExpired();
       const msg = e instanceof Error ? e.message : "Could not load queue.";
       setError(msg);
     } finally {
@@ -42,6 +43,7 @@ export default function Queue({ onBack, onOpenSummary }) {
       const log = await getTriageSession(sessionId);
       onOpenSummary(log.request_payload, log.response_payload);
     } catch (e) {
+      if (e?.status === 401) return onAuthExpired();
       const msg = e instanceof Error ? e.message : "Could not open summary.";
       setError(msg);
     }
@@ -58,13 +60,14 @@ export default function Queue({ onBack, onOpenSummary }) {
           <div>
             <span className="tag">Clinician Queue</span>
             <h2 className="section-title">Recent Patients</h2>
-            <p className="muted-line">Sorted by RED, ORANGE, GREEN, then newest first.</p>
+            <p className="muted-line">Sorted by RED, ORANGE, GREEN, then newest first. Logged in as {staff?.display_name}.</p>
           </div>
           <div className="cta-row">
             <button className="btn-secondary" onClick={loadQueue} disabled={loading}>
               {loading ? "Refreshing..." : "Refresh"}
             </button>
             <button className="btn-secondary" onClick={onBack}>Back</button>
+            <button className="btn-secondary" onClick={onLogout}>Log Out</button>
           </div>
         </div>
 
@@ -87,6 +90,7 @@ export default function Queue({ onBack, onOpenSummary }) {
                     <span>{LEVEL_LABELS[item.triage_level]}</span>
                     <span>{formatDate(item.created_at)}</span>
                     <span>Session {item.session_id}</span>
+                    {item.entered_by && <span>Entered by {item.entered_by}</span>}
                   </div>
                 </div>
               </div>

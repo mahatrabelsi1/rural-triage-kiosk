@@ -1,6 +1,5 @@
 import sys
 import unittest
-import uuid
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -9,22 +8,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from helpers import TempDbMixin  # noqa: E402
 from src.api import routes_triage  # noqa: E402
-from src.storage import db as storage_db  # noqa: E402
 from src.triage.schemas import IntakeRequest  # noqa: E402
 
 
-class TestTriageLogging(unittest.TestCase):
-    def setUp(self):
-        self.original_db_path = storage_db.DB_PATH
-        self.test_db_path = ROOT / "outputs" / f"test_triage_sessions_{uuid.uuid4().hex}.db"
-        self.test_db_path.parent.mkdir(parents=True, exist_ok=True)
-        storage_db.DB_PATH = self.test_db_path
-        storage_db.init_db()
-
-    def tearDown(self):
-        storage_db.DB_PATH = self.original_db_path
-
+class TestTriageLogging(TempDbMixin, unittest.TestCase):
     def test_triage_request_is_logged_and_retrievable(self):
         req = IntakeRequest(
             patient_name="Alice",

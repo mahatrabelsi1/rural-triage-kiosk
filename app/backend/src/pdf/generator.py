@@ -1,4 +1,4 @@
-from pathlib import Path
+import io
 import textwrap
 
 from reportlab.lib import colors
@@ -80,7 +80,6 @@ def _ensure_space(c: canvas.Canvas, y: int, needed: int, page_width: float, page
 
 
 def generate_doctor_pdf(
-    out_dir: Path,
     session_id: str,
     triage_level: str,
     patient_name: str,
@@ -91,11 +90,10 @@ def generate_doctor_pdf(
     extracted_entities: list[str],
     advice_blocks: list[str],
     patient_meta: dict,
-) -> Path:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    pdf_path = out_dir / f"triage_{session_id}.pdf"
-
-    c = canvas.Canvas(str(pdf_path), pagesize=A4)
+) -> bytes:
+    """Render the summary in memory so no patient data is left on disk."""
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
     page_width, page_height = A4
     theme = _level_theme(triage_level)
 
@@ -195,4 +193,4 @@ def generate_doctor_pdf(
     _draw_footer(c, page_width)
     c.showPage()
     c.save()
-    return pdf_path
+    return buffer.getvalue()

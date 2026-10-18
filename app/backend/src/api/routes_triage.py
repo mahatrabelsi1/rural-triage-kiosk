@@ -2,9 +2,10 @@ import re
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from src.advice.advice_engine import build_advice_blocks, load_catalog
+from src.auth import require_staff
 from src.nlp.extractor import extract_symptom_details_from_text, merge_manual_and_extracted_symptoms
 from src.nlp.hf_extractor import process_complaint_text
 from src.storage.db import get_latest_triage_log, insert_triage_log, list_recent_triage_logs
@@ -278,13 +279,13 @@ def triage(req: IntakeRequest):
     return response
 
 
-@router.get("", response_model=list[TriageQueueItem])
+@router.get("", response_model=list[TriageQueueItem], dependencies=[Depends(require_staff)])
 def recent_triage_queue(limit: int = 50):
     safe_limit = max(1, min(int(limit), 100))
     return list_recent_triage_logs(safe_limit)
 
 
-@router.get("/{session_id}", response_model=TriageLogResponse)
+@router.get("/{session_id}", response_model=TriageLogResponse, dependencies=[Depends(require_staff)])
 def get_triage_log(session_id: str):
     log = get_latest_triage_log(session_id)
     if log is None:

@@ -572,3 +572,14 @@ textarea {
     width: min(100%, 364px);
   }
 }
+
+.login-card {
+  max-width: 460px;
+  display: grid;
+  gap: 10px;
+}
+
+.login-form {
+  display: grid;
+  gap: 12px;
+}

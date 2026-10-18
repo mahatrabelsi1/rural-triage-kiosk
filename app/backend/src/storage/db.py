@@ -1,16 +1,30 @@
 import json
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 DB_PATH = Path(__file__).resolve().parents[2] / "outputs" / "triage_sessions.db"
 
 
-def get_conn() -> sqlite3.Connection:
+@contextmanager
+def get_conn() -> Iterator[sqlite3.Connection]:
+    """Open a connection, commit on success, and always close it.
+
+    sqlite3's own context manager only commits; it never closes, which leaked
+    a connection per request.
+    """
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db() -> None:
@@ -26,6 +40,7 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_triage_logs_session ON triage_logs (session_id)")
 
 
 def insert_triage_log(session_id: str, triage_level: str, payload: dict[str, Any]) -> None:
@@ -96,6 +111,7 @@ def list_recent_triage_logs(limit: int = 50) -> list[dict[str, Any]]:
                 "patient_name": request.get("patient_name", ""),
                 "age_group": request.get("age_group"),
                 "sex": request.get("sex"),
+                "entered_by": request.get("entered_by"),
                 "chief_complaint_text": request.get("chief_complaint_text", ""),
             }
         )

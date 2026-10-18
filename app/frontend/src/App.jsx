@@ -1,7 +1,9 @@
 import { useState } from "react";
 
+import { loadStaffSession, saveStaffSession, setStaffToken } from "./api/client";
 import AvatarAssistant from "./components/AvatarAssistant";
 import Intake from "./pages/Intake";
+import Login from "./pages/Login";
 import Queue from "./pages/Queue";
 import Result from "./pages/Result";
 import Welcome from "./pages/Welcome";
@@ -26,6 +28,23 @@ export default function App() {
   const [intake, setIntake] = useState(null);
   const [triageRes, setTriageRes] = useState(null);
   const [speechText, setSpeechText] = useState(WELCOME_LINE);
+  const [staff, setStaff] = useState(() => loadStaffSession());
+
+  function updateStaff(session) {
+    saveStaffSession(session);
+    setStaffToken(session?.token);
+    setStaff(session);
+  }
+
+  function openQueue() {
+    setSpeechText(QUEUE_LINE);
+    setStep(staff ? "queue" : "login");
+  }
+
+  function authExpired() {
+    updateStaff(null);
+    setStep("login");
+  }
 
   let page = null;
   if (step === "landing") {
@@ -37,10 +56,7 @@ export default function App() {
           setSpeechText(PATIENT_INFO_LINE);
           setStep("intake");
         }}
-        onQueue={() => {
-          setSpeechText(QUEUE_LINE);
-          setStep("queue");
-        }}
+        onQueue={openQueue}
       />
     );
   }
@@ -58,9 +74,26 @@ export default function App() {
       />
     );
   }
+  if (step === "login") {
+    page = (
+      <Login
+        onBack={() => setStep("landing")}
+        onLoggedIn={(session) => {
+          updateStaff(session);
+          setStep("queue");
+        }}
+      />
+    );
+  }
   if (step === "queue") {
     page = (
       <Queue
+        staff={staff}
+        onAuthExpired={authExpired}
+        onLogout={() => {
+          updateStaff(null);
+          setStep("landing");
+        }}
         onBack={() => setStep("landing")}
         onOpenSummary={(storedIntake, storedResult) => {
           setIntake(storedIntake);
@@ -76,6 +109,8 @@ export default function App() {
       <Result
         intake={intake}
         triageRes={triageRes}
+        isStaff={Boolean(staff)}
+        onAuthExpired={authExpired}
         restartLabel={role === "clinician" ? "Back To Queue" : "New Patient"}
         onRestart={() => {
           setStep(role === "clinician" ? "queue" : "landing");

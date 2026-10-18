@@ -1,40 +1,37 @@
-import { postPdf } from "../api/client";
+import { useState } from "react";
+
+import { downloadPdf } from "../api/client";
 
 function prettyLabel(key) {
   return key.replaceAll("_", " ");
 }
 
-export default function Result({ intake, triageRes, onRestart, restartLabel = "New Patient" }) {
+export default function Result({ intake, triageRes, isStaff, onRestart, onAuthExpired, restartLabel = "New Patient" }) {
   const levelKey = (triageRes?.triage_level || "GREEN").toLowerCase();
+  const [pdfError, setPdfError] = useState("");
+  const [pdfLoading, setPdfLoading] = useState(false);
 
-  async function downloadPdf() {
-    const payload = {
-      session_id: triageRes.session_id,
-      triage_level: triageRes.triage_level,
-      patient_name: intake.patient_name,
-      chief_complaint_text: intake.chief_complaint_text,
-      matched_reasons: triageRes.matched_rules.map((r) => `${r.id}: ${r.reason}`),
-      selected_symptoms: triageRes.selected_symptoms.map((s) => `${prettyLabel(s.symptom)} = ${s.rating}/3`),
-      extracted_symptoms: (triageRes.extracted_symptoms || []).map((s) =>
-        `${prettyLabel(s.symptom)} = ${s.rating}/3 (${Math.round((s.confidence || 0) * 100)}% confidence, phrase: "${s.source_phrase || "n/a"}")`
-      ),
-      extracted_entities: (triageRes.extracted_entities || []).map((entity) =>
-        `${entity.text} (${entity.label}, ${Math.round((entity.score || 0) * 100)}% confidence)`
-      ),
-      advice_blocks: triageRes.advice_blocks,
-      age_group: intake.age_group,
-      sex: intake.sex,
-      pregnant: intake.pregnant,
-      chronic_illnesses: intake.chronic_illnesses,
-      chronic_illnesses_other: intake.chronic_illnesses_other
-    };
-    const blob = await postPdf(payload);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `triage_${triageRes.session_id}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+  async function savePdf() {
+    setPdfError("");
+    setPdfLoading(true);
+    try {
+      // The server rebuilds the PDF from the stored session, so only the ID is sent.
+      const blob = await downloadPdf(triageRes.session_id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `triage_${triageRes.session_id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoking immediately can cancel the download in some browsers.
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e) {
+      if (e?.status === 401) return onAuthExpired?.();
+      setPdfError(e instanceof Error ? e.message : "PDF failed.");
+    } finally {
+      setPdfLoading(false);
+    }
   }
 
   const chronicLines = [
@@ -110,8 +107,13 @@ export default function Result({ intake, triageRes, onRestart, restartLabel = "N
           {triageRes.advice_blocks.map((a, i) => <li key={i}>{a}</li>)}
         </ul>
 
+        {pdfError && <p className="error-text" role="alert">{pdfError}</p>}
         <div className="cta-row" style={{ marginTop: 18 }}>
-          <button className="btn-primary" onClick={downloadPdf}>Download Doctor PDF</button>
+          {isStaff && (
+            <button className="btn-primary" onClick={savePdf} disabled={pdfLoading}>
+              {pdfLoading ? "Preparing PDF..." : "Download Doctor PDF"}
+            </button>
+          )}
           <button className="btn-secondary" onClick={onRestart}>{restartLabel}</button>
         </div>
       </section>
