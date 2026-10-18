@@ -99,6 +99,14 @@ const COPY = {
   },
 };
 
+// "My name is Amina." -> "Amina": people answer the name question in a sentence.
+export function nameFromSpeech(text) {
+  return text
+    .replace(/^\s*(my name is|my name's|the patient is|the patient's name is|patient name is|this is|i am|i'm|it's|it is|her name is|his name is)\s+/i, "")
+    .replace(/[.!?,]+$/, "")
+    .trim();
+}
+
 export function symptomLabel(key) {
   return SYMPTOM_LABELS[key] || key.replaceAll("_", " ");
 }
@@ -253,7 +261,7 @@ export default function Intake({ enteredBy = "patient", onBack, onDone, onNarrat
               <div>
                 <label htmlFor="patient-name">{copy.name}</label>
                 <input id="patient-name" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
-                <MicButton label="Say name" onText={(t) => setPatientName(t.replace(/[.!?]+$/, ""))} />
+                <MicButton label="Say name" onText={(t) => setPatientName(nameFromSpeech(t))} />
               </div>
               <div>
                 <label htmlFor="age-group">{copy.age}</label>

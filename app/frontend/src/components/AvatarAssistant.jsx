@@ -144,8 +144,14 @@ export default function AvatarAssistant({ speech }) {
     if (!settings.voiceEnabled || !unlocked || !speech?.text) return;
     if (lastSpokenIdRef.current === speech.id) return;
     lastSpokenIdRef.current = speech.id;
+    // Never talk over the microphone: the nurse's voice would end up in the recording.
+    if (listening) return;
     speak(speech.text);
-  }, [speech, settings.voiceEnabled, unlocked, speak]);
+  }, [speech, settings.voiceEnabled, unlocked, speak, listening]);
+
+  useEffect(() => {
+    if (listening) stop();
+  }, [listening, stop]);
 
   useEffect(() => {
     if (!settings.voiceEnabled) stop();
@@ -269,7 +275,7 @@ export default function AvatarAssistant({ speech }) {
           <label>
             Speech input (microphone)
             <select value={settings.sttEngine} onChange={(e) => updateSettings({ sttEngine: e.target.value })}>
-              <option value="auto">Automatic</option>
+              <option value="auto">Automatic (kiosk server, browser as backup)</option>
               <option value="browser" disabled={!browserRecognitionAvailable()}>
                 Browser recognition{browserRecognitionAvailable() ? "" : " (not supported here)"}
               </option>

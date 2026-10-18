@@ -147,6 +147,14 @@ Automated in `test_api.py`; also checked by hand with `curl` against a running s
 | Lip-sync, AI voice (audio loudness) | Browser: 40 samples during narration | 28 distinct mouth shapes; captions highlighted word by word |
 | Mic opens while the nurse is talking | Browser | Nurse stops talking and status shows "Listening to you..." |
 
+**Follow-up: name field gave no text (reported 2026-10-18).** A WAV of "My name is Amina Ben Salah" plus 3 s of silence was fed in as Edge's microphone:
+
+| Mode | Before fix | After fix |
+|---|---|---|
+| Automatic, user waits (no Stop press) | Edge recognizer returned an empty final result; field stayed empty with **no message** | Auto-stop after the pause; name field = `Amina Bansala` ("My name is" trimmed) |
+| Kiosk server, Stop pressed after 2.5 s | Worked | Works: `Amina Benson` (cut mid-name by the early Stop, as expected) |
+| Browser recognition only | Empty field, no message | Empty field, but the message "We did not catch any words. Please press the microphone and speak again..." is shown |
+
 ---
 
 ## 6. End-to-end browser checks

@@ -1,14 +1,19 @@
 import { postTranscription } from "../api/client";
 
 // Two speech-to-text paths:
-//  - "browser": the Web Speech API (Chrome/Edge/Safari). Fast, shows words live,
-//    but Chrome/Edge send audio to an online service.
 //  - "server": record 16 kHz WAV here and transcribe with Whisper on the kiosk
-//    server. Works offline once the model is downloaded, and in Firefox.
-// "auto" tries the browser first and falls back to the server.
+//    server. Works offline once the model is downloaded, in every browser.
+//  - "browser": the Web Speech API. Needs internet in Chrome/Edge, and Edge
+//    often returns an empty final result, so it is only the fallback.
+// "auto" uses the server and falls back to the browser if the server can't transcribe.
 
 const TARGET_RATE = 16000;
 const MAX_RECORD_MS = 30000;
+// Voice-activity detection for auto-stop (peak amplitude per audio block).
+const SPEECH_LEVEL = 0.06;
+const SILENCE_LEVEL = 0.03;
+const END_SILENCE_MS = 1500;
+const NO_SPEECH_MS = 8000;
 
 export function browserRecognitionAvailable() {
   return typeof window !== "undefined" && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -31,6 +36,7 @@ export function startBrowserRecognition({ lang, onInterim, onFinal, onError, onE
   rec.maxAlternatives = 1;
 
   let finalText = "";
+  let lastInterim = "";
   let failed = false;
   rec.onresult = (event) => {
     let interim = "";
@@ -39,7 +45,8 @@ export function startBrowserRecognition({ lang, onInterim, onFinal, onError, onE
       if (result.isFinal) finalText += result[0].transcript;
       else interim += result[0].transcript;
     }
-    onInterim?.((finalText + " " + interim).trim());
+    lastInterim = (finalText + " " + interim).trim();
+    onInterim?.(lastInterim);
   };
   rec.onerror = (event) => {
     failed = true;
@@ -47,7 +54,8 @@ export function startBrowserRecognition({ lang, onInterim, onFinal, onError, onE
     onError?.({ code, canFallBack: FALLBACK_ERRORS.has(code) });
   };
   rec.onend = () => {
-    if (!failed) onFinal?.(finalText.trim());
+    // Edge sometimes ends with an empty final result; keep what was heard live.
+    if (!failed) onFinal?.(finalText.trim() || lastInterim);
     onEnd?.();
   };
   rec.start();
@@ -92,7 +100,7 @@ export function encodeWav(samples, rate = TARGET_RATE) {
   return new Blob([view], { type: "audio/wav" });
 }
 
-export async function startServerRecording({ onLevel, onAutoStop } = {}) {
+export async function startServerRecording({ onLevel, onAutoStop, autoStopOnSilence = true } = {}) {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
   });
@@ -102,13 +110,27 @@ export async function startServerRecording({ onLevel, onAutoStop } = {}) {
   // ScriptProcessor is deprecated but universally supported and needs no extra file.
   const processor = ctx.createScriptProcessor(4096, 1, 1);
   const chunks = [];
+  let heardSpeech = false;
+  let silentMs = 0;
+  let elapsedMs = 0;
+  let autoStopped = false;
   processor.onaudioprocess = (e) => {
     const data = e.inputBuffer.getChannelData(0);
     chunks.push(new Float32Array(data));
-    if (onLevel) {
-      let peak = 0;
-      for (let i = 0; i < data.length; i += 64) peak = Math.max(peak, Math.abs(data[i]));
-      onLevel(peak);
+    let peak = 0;
+    for (let i = 0; i < data.length; i += 16) peak = Math.max(peak, Math.abs(data[i]));
+    onLevel?.(peak);
+
+    // Stop by itself once the person has spoken and then paused, so nobody
+    // has to find the Stop button.
+    const blockMs = (data.length / ctx.sampleRate) * 1000;
+    elapsedMs += blockMs;
+    if (peak >= SPEECH_LEVEL) heardSpeech = true;
+    silentMs = peak < SILENCE_LEVEL ? silentMs + blockMs : 0;
+    if (autoStopOnSilence && !autoStopped &&
+        ((heardSpeech && silentMs >= END_SILENCE_MS) || (!heardSpeech && elapsedMs >= NO_SPEECH_MS))) {
+      autoStopped = true;
+      onAutoStop?.();
     }
   };
   source.connect(processor);

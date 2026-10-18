@@ -8,11 +8,18 @@ import {
 } from "../voice/stt";
 import { STOP_SPEAKING_EVENT, useVoiceSettings } from "../voice/VoiceSettings";
 
+const NOTHING_HEARD = "We did not catch any words. Please press the microphone and speak again, a little closer.";
+const MIC_BLOCKED = "Microphone permission was blocked. Please allow the microphone, or type instead.";
+
 const BROWSER_ERRORS = {
-  "not-allowed": "Microphone permission was blocked. Please allow the microphone, or type instead.",
-  "no-speech": "We did not hear anything. Please try again, a little closer to the microphone.",
+  "not-allowed": MIC_BLOCKED,
+  "no-speech": NOTHING_HEARD,
   aborted: "",
 };
+
+// Set when the kiosk server can't transcribe (model missing/offline on first
+// run), so "auto" mode uses browser recognition for the rest of the session.
+let serverSttUnavailable = false;
 
 // Speech-to-text button for a text field. Calls onText with the recognised words.
 export default function MicButton({ onText, label = "Speak" }) {
@@ -22,8 +29,9 @@ export default function MicButton({ onText, label = "Speak" }) {
   const [error, setError] = useState("");
   const sessionRef = useRef(null);
 
-  const canUseBrowser = browserRecognitionAvailable() && settings.sttEngine !== "server";
-  const canUseServer = serverRecordingAvailable() && settings.sttEngine !== "browser";
+  const engine = settings.sttEngine;
+  const canUseBrowser = browserRecognitionAvailable() && engine !== "server";
+  const canUseServer = serverRecordingAvailable() && engine !== "browser";
   const supported = canUseBrowser || canUseServer;
 
   useEffect(() => {
@@ -36,6 +44,12 @@ export default function MicButton({ onText, label = "Speak" }) {
     setListening(false);
   }, [setListening]);
 
+  function deliver(text) {
+    const cleaned = (text || "").trim();
+    if (cleaned) onText(cleaned);
+    else setError(NOTHING_HEARD);
+  }
+
   async function startServer() {
     try {
       const session = await startServerRecording({ onAutoStop: () => finishServer() });
@@ -43,9 +57,7 @@ export default function MicButton({ onText, label = "Speak" }) {
       setState("recording");
     } catch (err) {
       setState("idle");
-      setError(err?.name === "NotAllowedError"
-        ? "Microphone permission was blocked. Please allow the microphone, or type instead."
-        : "Could not start the microphone on this device.");
+      setError(err?.name === "NotAllowedError" ? MIC_BLOCKED : "Could not start the microphone on this device.");
     }
   }
 
@@ -55,11 +67,14 @@ export default function MicButton({ onText, label = "Speak" }) {
     sessionRef.current = null;
     setState("transcribing");
     try {
-      const text = await session.stop();
-      if (text) onText(text);
-      else setError("We did not catch any words. Please try again.");
+      deliver(await session.stop());
     } catch (err) {
-      setError(err instanceof Error ? `Speech-to-text failed: ${err.message}` : "Speech-to-text failed.");
+      if (err?.status === 503 && engine === "auto" && browserRecognitionAvailable()) {
+        serverSttUnavailable = true;
+        setError("Offline speech recognition is not ready on this kiosk. Press the microphone again to use the browser instead.");
+      } else {
+        setError(err instanceof Error ? `Speech-to-text failed: ${err.message}` : "Speech-to-text failed.");
+      }
     } finally {
       setState("idle");
     }
@@ -69,13 +84,11 @@ export default function MicButton({ onText, label = "Speak" }) {
     setState("listening");
     sessionRef.current = startBrowserRecognition({
       onInterim: setInterim,
-      onFinal: (text) => {
-        if (text) onText(text);
-      },
+      onFinal: deliver,
       onError: ({ code, canFallBack }) => {
         sessionRef.current = null;
-        if (canFallBack && canUseServer) {
-          // Usually "network": Chrome/Edge recognition needs internet. Record locally instead.
+        if (canFallBack && canUseServer && !serverSttUnavailable) {
+          // Usually "network": browser recognition needs internet. Record locally instead.
           setInterim("");
           startServer();
           return;
@@ -102,8 +115,10 @@ export default function MicButton({ onText, label = "Speak" }) {
     }
     if (state !== "idle") return;
     window.dispatchEvent(new Event(STOP_SPEAKING_EVENT));
-    if (canUseBrowser) startBrowser();
-    else if (canUseServer) startServer();
+    // The kiosk server is the reliable path (offline, any browser); browser
+    // recognition is used only when chosen or when the server can't help.
+    if (canUseServer && !(engine === "auto" && serverSttUnavailable && canUseBrowser)) startServer();
+    else if (canUseBrowser) startBrowser();
   }
 
   if (!supported) return null;
@@ -121,7 +136,11 @@ export default function MicButton({ onText, label = "Speak" }) {
         <span className="mic-dot" aria-hidden="true" />
         {state === "transcribing" ? "Writing it down..." : active ? "Stop" : label}
       </button>
-      {active && <span className="mic-hint">{interim || (state === "recording" ? "Recording... press Stop when done." : "Listening...")}</span>}
+      {active && (
+        <span className="mic-hint">
+          {interim || (state === "recording" ? "Speak now. It stops by itself when you pause." : "Listening...")}
+        </span>
+      )}
       {error && <span className="mic-error" role="alert">{error}</span>}
     </div>
   );

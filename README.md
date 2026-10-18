@@ -102,12 +102,12 @@ Everything is designed to run on modest kiosk hardware: no GPU, and no video dec
 | **AI voice** | `POST /speech` runs `facebook/mms-tts-eng` on the kiosk server. The mouth follows the real audio loudness. Falls back to the device voice automatically. | Yes, after the first model download |
 | **Captions** | The spoken text is shown with the current word highlighted. | Yes |
 | **Read Aloud** | Button on the patient result reads the steps and advice. | Yes |
-| **Speech-to-text** | Mic buttons on name, illness and complaint fields. Browser recognition is tried first. On failure (or if set), audio is recorded as WAV and sent to `POST /speech/transcribe`, which runs Whisper-tiny on the server. | Server mode: yes |
+| **Speech-to-text** | Mic buttons on name, illness and complaint fields. Audio is recorded as WAV and sent to `POST /speech/transcribe` (Whisper-tiny on the kiosk server). Recording **stops by itself** about 1.5 s after the person stops talking. The browser's built-in recognition is only a backup. "My name is…" is trimmed to just the name. | Yes |
 | **Settings** | Voice on/off, device vs AI voice, voice picker, speed 0.7x–1.4x, captions, speech-input mode, animated vs video avatar. Saved per kiosk. | — |
 
 Notes:
 - Browsers only allow sound after the first tap. Until then the nurse shows "Tap anywhere to hear the nurse".
-- Chrome and Edge built-in speech recognition sends audio to an online service. For a fully offline kiosk, set **Speech input → Kiosk server** in the avatar settings.
+- **Automatic** speech input uses the kiosk server first. Browser recognition is a backup only: Chrome and Edge send its audio online, and in testing Edge often returned an empty result. If nothing is recognised, the kiosk always says so and asks the person to try again.
 - Whisper auto-detects the spoken language (e.g. Arabic, French, English). To force one, set `STT_LANGUAGE=en` (or `fr`, `ar`).
 - Silence and non-speech noise return no text (Whisper invents text on silence otherwise). The kiosk then asks the person to try again.
 - The **video avatar** is the old looping clip. It cannot lip-sync and is kept only as an option.
@@ -298,7 +298,8 @@ Fixes are listed in the order they were made: 🔴 safety first, then 🟠 relia
 ### 🗣️ Virtual nurse and speech
 - New lightweight SVG nurse with lip-sync, captions with word highlighting, Read Aloud, and a voice settings panel.
 - **The AI voice now works.** The old default model `Vedika35/Vedika_text_to_speech` uses an architecture `transformers` 4.x can't load, so it always failed. The default is now `facebook/mms-tts-eng`.
-- **Speech-to-text** on intake fields. Browser recognition first, with automatic fallback to offline Whisper-tiny on the kiosk server.
+- **Speech-to-text** on intake fields: offline Whisper-tiny on the kiosk server with auto-stop on silence, browser recognition as backup.
+- **Fix:** speaking into the name field gave nothing in Edge. Its built-in recognizer returned an empty result and the kiosk failed silently. Automatic mode now uses the server first, keeps any words heard live, and always shows a message if nothing was caught.
 
 ---
 
