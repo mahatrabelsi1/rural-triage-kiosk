@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { loadStaffSession, saveStaffSession, setStaffToken } from "./api/client";
+import {
+  completeSession,
+  getTriageQueue,
+  getTriageSession,
+  loadStaffSession,
+  reopenSession,
+  saveStaffSession,
+  setStaffToken,
+} from "./api/client";
 import AvatarAssistant from "./components/AvatarAssistant";
 import Intake from "./pages/Intake";
 import Login from "./pages/Login";
@@ -9,7 +17,7 @@ import Result from "./pages/Result";
 import Welcome from "./pages/Welcome";
 
 const WELCOME_LINE = "Hello and welcome! I am your virtual nurse. Please tell me who is filling in the form today.";
-const QUEUE_LINE = "Clinic queue. Here are the recent patients, sorted by urgency for clinician review.";
+const QUEUE_LINE = "Clinic queue. Patients are sorted by urgency, then by how long they have waited.";
 const LOGIN_LINE = "Staff login. Please enter your clinic username and password.";
 
 // A shared public kiosk must not keep one patient's answers on screen for the next person.
@@ -26,6 +34,8 @@ function resultLine(level, enteredBy) {
   }
   return `${who} green. Please follow the advice on the screen, and tell the nurse if anything gets worse.`;
 }
+
+const STAFF_LEVEL_WORDS = { RED: "red, urgent review now", ORANGE: "orange, same-day review", GREEN: "green, lower urgency" };
 
 function useIdle(active, timeoutMs, onIdle) {
   const onIdleRef = useRef(onIdle);
@@ -53,6 +63,9 @@ export default function App() {
   const [intake, setIntake] = useState(null);
   const [triageRes, setTriageRes] = useState(null);
   const [resultFromQueue, setResultFromQueue] = useState(false);
+  // Queue status of the case a staff member has open: waiting/done, who, when.
+  const [sessionMeta, setSessionMeta] = useState(null);
+  const [queueNotice, setQueueNotice] = useState("");
   // Each narration gets a new id so the same text can be spoken again on request.
   const [speech, setSpeech] = useState({ text: WELCOME_LINE, id: 0 });
   const speechIdRef = useRef(0);
@@ -74,6 +87,8 @@ export default function App() {
     setIntake(null);
     setTriageRes(null);
     setResultFromQueue(false);
+    setSessionMeta(null);
+    setQueueNotice("");
     setSpeechText(WELCOME_LINE);
     setStep("landing");
   }
@@ -81,6 +96,50 @@ export default function App() {
   function openQueue() {
     setSpeechText(staff ? QUEUE_LINE : LOGIN_LINE);
     setStep(staff ? "queue" : "login");
+  }
+
+  function openStaffCase(log) {
+    setIntake(log.request_payload);
+    setTriageRes(log.response_payload);
+    setSessionMeta({
+      status: log.status,
+      completed_by: log.completed_by,
+      completed_at: log.completed_at,
+      arrived_at: log.arrived_at,
+    });
+    setResultFromQueue(true);
+    setQueueNotice("");
+    const name = log.request_payload?.patient_name || "Unnamed patient";
+    const level = STAFF_LEVEL_WORDS[log.response_payload.triage_level] || log.response_payload.triage_level;
+    setSpeechText(log.status === "done" ? `${name}. Already seen.` : `Next patient: ${name}. Level ${level}.`);
+    setStep("result");
+  }
+
+  function backToQueue(notice) {
+    setIntake(null);
+    setTriageRes(null);
+    setSessionMeta(null);
+    setQueueNotice(notice);
+    setSpeechText(notice || QUEUE_LINE);
+    setStep("queue");
+  }
+
+  // "Done - next patient": mark this case as seen, then open whoever is now
+  // first in the waiting queue (most urgent, then longest waiting).
+  async function doneAndNext() {
+    const finishedName = intake?.patient_name || "Patient";
+    await completeSession(triageRes.session_id);
+    const waiting = await getTriageQueue(1, "waiting");
+    if (!waiting.length) {
+      backToQueue(`${finishedName} marked as seen. Nobody else is waiting.`);
+      return;
+    }
+    openStaffCase(await getTriageSession(waiting[0].session_id));
+  }
+
+  async function reopenCurrent() {
+    await reopenSession(triageRes.session_id);
+    setSessionMeta((meta) => ({ ...meta, status: "waiting", completed_by: null, completed_at: null }));
   }
 
   function authExpired() {
@@ -148,13 +207,8 @@ export default function App() {
           goHome();
         }}
         onBack={goHome}
-        onOpenSummary={(storedIntake, storedResult) => {
-          setIntake(storedIntake);
-          setTriageRes(storedResult);
-          setResultFromQueue(true);
-          setSpeechText(resultLine(storedResult.triage_level, "nurse"));
-          setStep("result");
-        }}
+        notice={queueNotice}
+        onOpenSummary={openStaffCase}
       />
     );
   }
@@ -165,15 +219,15 @@ export default function App() {
         intake={intake}
         triageRes={triageRes}
         isStaff={staffView}
+        sessionMeta={staffView ? sessionMeta : null}
+        onDoneNext={doneAndNext}
+        onReopen={reopenCurrent}
         onAuthExpired={authExpired}
         onReadAloud={narrate}
         restartLabel={staffView ? "Back To Queue" : "Finish"}
         onRestart={() => {
           if (staffView) {
-            setIntake(null);
-            setTriageRes(null);
-            setSpeechText(QUEUE_LINE);
-            setStep("queue");
+            backToQueue("");
           } else {
             goHome();
           }

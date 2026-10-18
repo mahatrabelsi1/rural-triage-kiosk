@@ -100,7 +100,8 @@ Run from `app/backend`: `python -m unittest discover tests`
 | `test_safety_regressions.py` (new) | 24 | — | 24 pass |
 | `test_api.py` (new) | 15 | — | 15 pass |
 | `test_speech.py` (new) | 9 | — | 9 pass |
-| **Total** | **68** | **20 pass** | **68 pass** |
+| `test_queue_workflow.py` (new) | 10 | — | 10 pass |
+| **Total** | **78** | **20 pass** | **78 pass** |
 
 Other test-health results:
 
@@ -184,6 +185,26 @@ Full flow in Edge against the running backend and frontend:
 | Download Doctor PDF | `triage_<id>.pdf` downloaded (3.4 KB, valid PDF) |
 | Speech input set to "Kiosk server" → record → stop | Audio sent to `/speech/transcribe`, result handled |
 | JavaScript errors in the console | None (only the expected 401 from the wrong-password test) |
+
+---
+
+## 6b. Clinic queue workflow
+
+Browser run against a throwaway backend with a temporary database: 3 patients seeded through the API, plus "Vague Val" entered on the kiosk, who went through the safety questions.
+
+| Check | Before | After |
+|---|---|---|
+| Patient who answered the safety questions | 2 queue entries (stale GREEN + real RED) | 1 entry (RED) |
+| Waiting order | Urgency, then **newest** first | `Red Rania, Vague Val, Orange Omar, Green Gaston`: urgency, then longest waiting |
+| Call Next Patient | did not exist | Opens #1 (Red Rania) |
+| Done, Next Patient (×4) | did not exist | Opened Red, Vague Val, Orange, Green in order, then "Green Gaston marked as seen. Nobody else is waiting." |
+| Tabs after finishing | — | Waiting 0 / Seen 4 |
+| Seen tab order | — | First run: jumbled (4 marked within one second, timestamps had 1 s precision). After storing milliseconds: `Green, Orange, Vague Val, Red` (most recent first) |
+| Seen case banner | — | "Seen by Nurse on duty at 01:32 pm" |
+| Reopen | — | Back to "Waiting since...", tabs Waiting 1 / Seen 3 |
+| Mark seen without login | — | 401 |
+| Unknown / malformed session | — | 404 / 422 |
+| Re-using a finished or non-clarification session ID from the kiosk | — | Ignored, a new session is created |
 
 ---
 

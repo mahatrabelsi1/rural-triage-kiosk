@@ -127,6 +127,9 @@ export default function Intake({ enteredBy = "patient", onBack, onDone, onNarrat
   const [chief, setChief] = useState("");
   const [symptoms, setSymptoms] = useState(() => Object.fromEntries(SYMPTOMS.map(s => [s, 0])));
   const [followUps, setFollowUps] = useState([]);
+  // Session of the first submission; the clarification answers update it
+  // instead of creating a second queue entry.
+  const [pendingSessionId, setPendingSessionId] = useState(null);
   const [followAnswers, setFollowAnswers] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -182,6 +185,7 @@ export default function Intake({ enteredBy = "patient", onBack, onDone, onNarrat
       chronic_illnesses_other: chronicOther.trim(),
       chief_complaint_text: chief,
       symptoms: overrideSymptoms ?? symptoms,
+      ...(clarificationCompleted && pendingSessionId ? { session_id: pendingSessionId } : {}),
     };
   }
 
@@ -198,6 +202,7 @@ export default function Intake({ enteredBy = "patient", onBack, onDone, onNarrat
       const payload = buildPayload();
       const res = await postTriage(payload);
       if (res.needs_clarification && res.follow_up_questions?.length) {
+        setPendingSessionId(res.session_id);
         setFollowUps(res.follow_up_questions);
         setFollowAnswers(Object.fromEntries(res.follow_up_questions.map((q) => [q.question_id, ""])));
         setFormStep("clarify");

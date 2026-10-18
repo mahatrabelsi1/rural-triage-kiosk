@@ -3,10 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from src.auth import require_staff
 from src.pdf.generator import generate_doctor_pdf
 from src.storage.db import get_latest_triage_log
+from src.triage.schemas import SESSION_ID_PATTERN
 
 router = APIRouter()
-
-SESSION_ID_PATTERN = r"^[0-9a-f]{12}$"
 
 
 def _label(key: str) -> str:

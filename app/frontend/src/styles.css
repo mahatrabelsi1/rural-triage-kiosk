@@ -973,3 +973,88 @@ textarea {
 .split-video .avatar-assistant {
   margin: auto 0;
 }
+
+/* ---------- Staff queue workflow ---------- */
+
+.queue-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.queue-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #edf5f9;
+}
+
+.queue-tab {
+  background: transparent;
+  color: #33586a;
+  padding: 8px 14px;
+}
+
+.queue-tab.active {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 6px rgba(12, 48, 69, 0.12);
+}
+
+.queue-tab .count {
+  display: inline-block;
+  min-width: 22px;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #d9ebf3;
+  font-size: 0.8rem;
+}
+
+.queue-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #e3f4ec;
+  color: var(--green);
+  font-weight: 700;
+}
+
+.queue-position {
+  margin-right: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.queue-wait {
+  color: #8f4f08;
+}
+
+.queue-item.is-done {
+  opacity: 0.75;
+  border-left-color: #9fb6c2;
+}
+
+.case-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff6ea;
+  border: 1px solid #f0c58f;
+  font-weight: 700;
+  color: #6b3d06;
+}
+
+.case-status.is-done {
+  background: #e3f4ec;
+  border-color: #9fd3b9;
+  color: var(--green);
+}

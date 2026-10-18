@@ -15,7 +15,7 @@ A virtual nurse avatar reads every screen aloud with lip-sync, and patients can 
 | Patient | No login. Open the kiosk and choose **"I am the patient"** | Their own questions and a plain-language result with a number to show the nurse |
 | Companion (family / friend / carer) | No login. Choose **"I am with the patient"** | Same as the patient, worded for the person helping |
 | Nurse entering for a patient alone | No login needed. Choose **"Nurse entering for the patient"** | Same intake, plus the option to turn AI text extraction off |
-| Clinic staff (nurse / doctor) | **Staff Login** button on the welcome screen | Clinic queue, full clinical summary for each patient, Doctor PDF download |
+| Clinic staff (nurse / doctor) | **Staff Login** button on the welcome screen | Clinic queue, full clinical summary, **Done, Next Patient**, Doctor PDF download |
 
 ### Demo staff accounts
 
@@ -23,6 +23,8 @@ A virtual nurse avatar reads every screen aloud with lip-sync, and patients can 
 |---|---|---|
 | `nurse` | `nurse2026` | Nurse on duty |
 | `doctor` | `doctor2026` | Duty clinician |
+
+**Nurse vs doctor:** right now the two accounts have **exactly the same access**: queue, summaries, marking patients as seen, PDF. The only difference is the name recorded when someone marks a patient as seen ("Seen by Nurse on duty" vs "Seen by Duty clinician"). Separate roles (for example nurse = "triaged / vitals taken", doctor = "consulted") are not built yet.
 
 **Change these before using the kiosk anywhere real.** Accounts are set in `app/backend/.env`:
 
@@ -43,11 +45,21 @@ AUTH_SECRET=<output of: python -c "import secrets; print(secrets.token_urlsafe(3
 | `http://localhost:8000/health` | Backend health check |
 | `http://localhost:8000/docs` | Interactive API documentation |
 
+### Clinic queue workflow (staff)
+
+1. Log in. The queue has two tabs: **Waiting** and **Seen**, each with a count. It refreshes by itself every 20 seconds, so new kiosk arrivals appear without pressing anything.
+2. Waiting patients are ordered **most urgent first (RED, ORANGE, GREEN), then whoever has waited longest**. Each card shows its position (#1, #2...), the waiting time, and who filled in the form.
+3. Press **Call Next Patient** to open #1's full summary.
+4. After seeing the patient, press **Done, Next Patient**. The patient moves to **Seen** (with your name and the time), and the next waiting patient opens straight away. When nobody is left, the queue says so.
+5. Marked someone by mistake? Open them from the **Seen** tab and press **Reopen (not seen yet)**. They go back into the waiting queue in their original place.
+
+A patient who answers the extra safety questions on the kiosk keeps **one** queue entry. Before this, the unanswered first submission showed up as a second, stale entry.
+
 ---
 
 ## Demonstrated Safety Performance
 
-**68 automated tests, all passing** (`python -m unittest discover tests` from `app/backend`). Every case tried during the latest review, with before and after results, is listed in **[TEST_CASES.md](TEST_CASES.md)**.
+**78 automated tests, all passing** (`python -m unittest discover tests` from `app/backend`). Every case tried during the latest review, with before and after results, is listed in **[TEST_CASES.md](TEST_CASES.md)**.
 
 Critical cases that used to be triaged **GREEN** and are now caught:
 
@@ -66,6 +78,7 @@ Critical cases that used to be triaged **GREEN** and are now caught:
 | `test_triage_safety.py` | 8 | Original escalation scenarios (distress, diabetes, pregnancy, elderly, cardiac, clarification) |
 | `test_safety_regressions.py` | 24 | Every gap found in review: critical language, negation scope, severity words, 0–3 scale sweeps, pregnancy |
 | `test_api.py` | 15 | Login, protected endpoints, CORS, PDF from stored session, path traversal, offline model fallback |
+| `test_queue_workflow.py` | 10 | Mark seen / reopen, who and when, queue order (urgency, then longest wait), one entry per patient after clarification |
 | `test_speech.py` | 9 | Speech-to-text decoding, resampling, silence and hallucination guards, error codes |
 | `test_nlp_extractor.py` | 5 | Extraction, negation, synonyms, merge, confidence |
 | `test_triage_logging.py` | 3 | Session logging, 404, urgency-sorted queue |
@@ -157,7 +170,7 @@ rural-triage-kiosk/
 │   │   │   ├── auth.py       # Staff login tokens
 │   │   │   ├── config.py     # Settings from environment / .env
 │   │   │   └── main.py
-│   │   ├── tests/            # 68 tests (see table above)
+│   │   ├── tests/            # 78 tests (see table above)
 │   │   ├── .env.example
 │   │   └── requirements.txt
 │   └── frontend/
@@ -245,8 +258,10 @@ To prepare a kiosk that will be offline, run each feature once while connected. 
 | `GET` | `/health` | — | Health check |
 | `POST` | `/auth/login` | — | `{username, password}` → bearer token |
 | `GET` | `/auth/me` | Staff | Current staff user |
-| `POST` | `/triage` | — | Submit intake; returns level, matched rules, extracted data, advice |
-| `GET` | `/triage?limit=50` | Staff | Queue sorted by urgency |
+| `POST` | `/triage` | — | Submit intake; returns level, matched rules, extracted data, advice. Send back `session_id` with the clarification answers to keep one session |
+| `GET` | `/triage?status=waiting&limit=50` | Staff | Queue, one entry per patient. `status`: `waiting` (urgency, then longest wait), `done` (most recently seen first), or `all` |
+| `POST` | `/triage/{session_id}/complete` | Staff | Mark a patient as seen (records staff name and time) |
+| `POST` | `/triage/{session_id}/reopen` | Staff | Put a patient back in the waiting queue |
 | `GET` | `/triage/{session_id}` | Staff | One stored session |
 | `GET` | `/pdf/{session_id}` | Staff | Doctor PDF, rebuilt from the stored session |
 | `POST` | `/speech` | — | `{text}` → WAV narration (AI voice) |
@@ -295,6 +310,12 @@ Fixes are listed in the order they were made: 🔴 safety first, then 🟠 relia
 - Separate patient result view (colour, next steps, number for the nurse). Clinical detail is shown only to logged-in staff opening a case from the queue.
 - Idle reset for patient data (3 min) and staff logout (10 min).
 - FastAPI `lifespan` instead of the deprecated `on_event`; rules and advice files cached until changed on disk; API address configurable with `VITE_API_BASE`; README corrected (the client uses `fetch`, not Axios).
+
+### 🏥 Clinic queue workflow
+- **Done, Next Patient:** staff mark a patient as seen and the next one opens. There are Waiting and Seen tabs, with Reopen for mistakes, and each case records who saw the patient and when.
+- **Queue order** is now most urgent, then **longest waiting** (it used to be newest first, which put new arrivals ahead of people already waiting).
+- **Fix:** a patient who answered the safety questions appeared twice in the queue (the stale first submission plus the real one). Now it's one entry.
+- Waiting time per patient, and the queue refreshes itself every 20 s.
 
 ### 🗣️ Virtual nurse and speech
 - New lightweight SVG nurse with lip-sync, captions with word highlighting, Read Aloud, and a voice settings panel.

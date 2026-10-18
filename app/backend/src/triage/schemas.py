@@ -10,6 +10,9 @@ SymptomRating = Annotated[int, Field(ge=0, le=3)]
 # Kiosk intake is filled by the patient, an accompanying person, or a nurse as a fallback.
 EnteredBy = Literal["patient", "companion", "nurse"]
 
+SESSION_ID_PATTERN = r"^[0-9a-f]{12}$"
+SessionStatus = Literal["waiting", "done"]
+
 
 class IntakeRequest(BaseModel):
     patient_name: str = Field(default="", max_length=200)
@@ -17,6 +20,9 @@ class IntakeRequest(BaseModel):
     symptoms: Dict[str, SymptomRating]
     use_nlp_extraction: bool = True
     clarification_completed: bool = False
+    # Sent back with the clarification answers so the patient keeps one session
+    # (and one queue entry) instead of two.
+    session_id: Optional[str] = Field(default=None, pattern=SESSION_ID_PATTERN)
     entered_by: Optional[EnteredBy] = None
     age_group: Optional[Literal["child", "adult", "elderly"]] = None
     sex: Optional[Literal["female", "male", "other"]] = None
@@ -71,6 +77,10 @@ class TriageLogResponse(BaseModel):
     session_id: str
     triage_level: TriageLevel
     created_at: str
+    arrived_at: Optional[str] = None
+    status: SessionStatus = "waiting"
+    completed_at: Optional[str] = None
+    completed_by: Optional[str] = None
     request_payload: Dict[str, Any]
     response_payload: Dict[str, Any]
 
@@ -79,6 +89,10 @@ class TriageQueueItem(BaseModel):
     session_id: str
     triage_level: TriageLevel
     created_at: str
+    arrived_at: Optional[str] = None
+    status: SessionStatus = "waiting"
+    completed_at: Optional[str] = None
+    completed_by: Optional[str] = None
     patient_name: str = ""
     age_group: Optional[str] = None
     sex: Optional[str] = None
@@ -100,3 +114,9 @@ class LoginResponse(BaseModel):
 
 class TranscriptionResponse(BaseModel):
     text: str
+
+
+class SessionStatusResponse(BaseModel):
+    session_id: str
+    status: SessionStatus
+    updated_by: str

@@ -1,14 +1,16 @@
 import re
 import uuid
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi import Path as PathParam
 
 from src.advice.advice_engine import build_advice_blocks, load_catalog
 from src.auth import require_staff
 from src.nlp.extractor import extract_symptom_details_from_text, merge_manual_and_extracted_symptoms
 from src.nlp.hf_extractor import process_complaint_text
-from src.storage.db import get_latest_triage_log, insert_triage_log, list_recent_triage_logs
+from src.storage.db import get_latest_triage_log, insert_triage_log, list_recent_triage_logs, set_session_status
 from src.triage.engine import run_triage
 from src.triage.rules_loader import load_rules
 from src.triage.safety import detect_critical_language
@@ -17,7 +19,9 @@ from src.triage.schemas import (
     ExtractedSymptom,
     FollowUpQuestion,
     IntakeRequest,
+    SESSION_ID_PATTERN,
     MatchedRule,
+    SessionStatusResponse,
     SelectedSymptom,
     TriageLogResponse,
     TriageQueueItem,
@@ -204,9 +208,24 @@ def _build_follow_up_questions(
     return questions[:3]
 
 
+def _session_id_for(req: IntakeRequest) -> str:
+    """Reuse the session when a patient answers the clarification questions,
+    so the queue shows them once. Only a still-waiting session that actually
+    asked for clarification can be continued."""
+    if req.session_id and req.clarification_completed:
+        previous = get_latest_triage_log(req.session_id)
+        if (
+            previous is not None
+            and previous["status"] == "waiting"
+            and previous["response_payload"].get("needs_clarification")
+        ):
+            return req.session_id
+    return uuid.uuid4().hex[:12]
+
+
 @router.post("", response_model=TriageResponse)
 def triage(req: IntakeRequest):
-    session_id = uuid.uuid4().hex[:12]
+    session_id = _session_id_for(req)
 
     rules = load_rules(RULES_PATH)
     allowed_symptoms = rules.get("symptoms", list(req.symptoms.keys()))
@@ -280,9 +299,9 @@ def triage(req: IntakeRequest):
 
 
 @router.get("", response_model=list[TriageQueueItem], dependencies=[Depends(require_staff)])
-def recent_triage_queue(limit: int = 50):
-    safe_limit = max(1, min(int(limit), 100))
-    return list_recent_triage_logs(safe_limit)
+def recent_triage_queue(limit: int = 50, status: Literal["waiting", "done", "all"] = "waiting"):
+    safe_limit = max(1, min(int(limit), 200))
+    return list_recent_triage_logs(safe_limit, status)
 
 
 @router.get("/{session_id}", response_model=TriageLogResponse, dependencies=[Depends(require_staff)])
@@ -291,3 +310,29 @@ def get_triage_log(session_id: str):
     if log is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return log
+
+
+def _set_status(session_id: str, status: str, claims: dict) -> SessionStatusResponse:
+    if get_latest_triage_log(session_id) is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    staff_name = claims.get("name") or claims["sub"]
+    set_session_status(session_id, status, staff_name)
+    return SessionStatusResponse(session_id=session_id, status=status, updated_by=staff_name)
+
+
+@router.post("/{session_id}/complete", response_model=SessionStatusResponse)
+def complete_session(
+    session_id: str = PathParam(pattern=SESSION_ID_PATTERN),
+    claims: dict = Depends(require_staff),
+):
+    """Staff mark a patient as seen; they leave the waiting queue."""
+    return _set_status(session_id, "done", claims)
+
+
+@router.post("/{session_id}/reopen", response_model=SessionStatusResponse)
+def reopen_session(
+    session_id: str = PathParam(pattern=SESSION_ID_PATTERN),
+    claims: dict = Depends(require_staff),
+):
+    """Undo "seen" (e.g. marked by mistake); the patient returns to the waiting queue."""
+    return _set_status(session_id, "waiting", claims)

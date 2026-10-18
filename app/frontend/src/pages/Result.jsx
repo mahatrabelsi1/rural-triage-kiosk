@@ -37,11 +37,29 @@ function severityWord(rating) {
   return SEVERITY_OPTIONS.find((o) => o.value === Number(rating))?.label || String(rating);
 }
 
-export default function Result({ intake, triageRes, isStaff, onRestart, onAuthExpired, onReadAloud, restartLabel = "New Patient" }) {
+function formatUtcTime(value) {
+  if (!value) return "";
+  return new Date(`${value.replace(" ", "T")}Z`).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+export default function Result({
+  intake,
+  triageRes,
+  isStaff,
+  sessionMeta,
+  onRestart,
+  onDoneNext,
+  onReopen,
+  onAuthExpired,
+  onReadAloud,
+  restartLabel = "New Patient",
+}) {
   const level = triageRes?.triage_level || "GREEN";
   const levelKey = level.toLowerCase();
   const [pdfError, setPdfError] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState("");
   const message = PATIENT_MESSAGES[level];
   const patientAdvice = triageRes.advice_blocks.filter((a) => !STAFF_ONLY_ADVICE.some((p) => a.startsWith(p)));
 
@@ -65,6 +83,19 @@ export default function Result({ intake, triageRes, isStaff, onRestart, onAuthEx
       setPdfError(e instanceof Error ? e.message : "PDF failed.");
     } finally {
       setPdfLoading(false);
+    }
+  }
+
+  async function runStatusAction(action) {
+    setStatusError("");
+    setStatusBusy(true);
+    try {
+      await action();
+    } catch (e) {
+      if (e?.status === 401) return onAuthExpired?.();
+      setStatusError(e instanceof Error ? e.message : "Could not update the patient status.");
+    } finally {
+      setStatusBusy(false);
     }
   }
 
@@ -122,6 +153,28 @@ export default function Result({ intake, triageRes, isStaff, onRestart, onAuthEx
           <h1 className="result-level">{level}</h1>
         </div>
 
+        {sessionMeta && (
+          <div className={`case-status ${sessionMeta.status === "done" ? "is-done" : ""}`} role="status">
+            <span>
+              {sessionMeta.status === "done"
+                ? `Seen by ${sessionMeta.completed_by || "staff"} at ${formatUtcTime(sessionMeta.completed_at)}`
+                : `Waiting since ${formatUtcTime(sessionMeta.arrived_at)}`}
+            </span>
+            <div className="cta-row">
+              {sessionMeta.status === "done" ? (
+                <button className="btn-secondary" disabled={statusBusy} onClick={() => runStatusAction(onReopen)}>
+                  Reopen (not seen yet)
+                </button>
+              ) : (
+                <button className="btn-primary" disabled={statusBusy} onClick={() => runStatusAction(onDoneNext)}>
+                  {statusBusy ? "Saving..." : "Done, Next Patient"}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {statusError && <p className="error-text" role="alert">{statusError}</p>}
+
         <h3 className="section-title">Patient Profile</h3>
         <ul className="list">
           <li>Name: {intake.patient_name || "N/A"}</li>
@@ -175,7 +228,12 @@ export default function Result({ intake, triageRes, isStaff, onRestart, onAuthEx
 
         {pdfError && <p className="error-text" role="alert">{pdfError}</p>}
         <div className="cta-row" style={{ marginTop: 18 }}>
-          <button className="btn-primary" onClick={savePdf} disabled={pdfLoading}>
+          {sessionMeta?.status === "waiting" && (
+            <button className="btn-primary" disabled={statusBusy} onClick={() => runStatusAction(onDoneNext)}>
+              {statusBusy ? "Saving..." : "Done, Next Patient"}
+            </button>
+          )}
+          <button className="btn-secondary" onClick={savePdf} disabled={pdfLoading}>
             {pdfLoading ? "Preparing PDF..." : "Download Doctor PDF"}
           </button>
           <button className="btn-secondary" onClick={onRestart}>{restartLabel}</button>

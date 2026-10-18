@@ -84,8 +84,17 @@ export function downloadPdf(sessionId) {
   return request(`/pdf/${encodeURIComponent(sessionId)}`, { auth: true, as: "blob", fallback: "PDF failed" });
 }
 
-export function getTriageQueue(limit = 50) {
-  return request(`/triage?limit=${limit}`, { auth: true, fallback: "Queue fetch failed" });
+// status: "waiting" (default), "done" (seen), or "all"
+export function getTriageQueue(limit = 50, status = "waiting") {
+  return request(`/triage?limit=${limit}&status=${status}`, { auth: true, fallback: "Queue fetch failed" });
+}
+
+export function completeSession(sessionId) {
+  return request(`/triage/${encodeURIComponent(sessionId)}/complete`, { method: "POST", auth: true, fallback: "Could not mark as seen" });
+}
+
+export function reopenSession(sessionId) {
+  return request(`/triage/${encodeURIComponent(sessionId)}/reopen`, { method: "POST", auth: true, fallback: "Could not reopen" });
 }
 
 export function getTriageSession(sessionId) {
